@@ -1,5 +1,6 @@
 import CatalogViewDefault from './default/catalog-view';
 import ProductDetailViewDefault from './default/product-detail-view';
+import CatalogViewGrand from './grand/catalog-view';
 
 export interface RendererTemplate {
   CatalogView: typeof CatalogViewDefault;
@@ -8,6 +9,9 @@ export interface RendererTemplate {
 
 const TEMPLATES: Record<string, RendererTemplate> = {
   default: { CatalogView: CatalogViewDefault, ProductDetailView: ProductDetailViewDefault },
+  // "grand": grid masonry ala Pinterest untuk kartu produk (components/templates/grand/product-card.tsx).
+  // Detail produk REUSE dari default -- yang diminta cuma beda tampilan katalog, bukan halaman detail.
+  grand: { CatalogView: CatalogViewGrand, ProductDetailView: ProductDetailViewDefault },
 };
 
 /**
