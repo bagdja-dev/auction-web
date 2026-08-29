@@ -46,8 +46,10 @@ export default function ProductCardGrand({
           </div>
         )}
         <span
-          className={`absolute left-3 top-3 rounded-full px-2.5 py-1 text-[11px] font-semibold text-white shadow ${
-            isAuction ? 'bg-[var(--palette-orange-burn)]' : 'bg-[var(--brand-success)]'
+          className={`absolute left-3 top-3 rounded-full px-2.5 py-1 text-[11px] font-semibold shadow ${
+            isAuction
+              ? 'bg-[var(--grand-orange)] text-white'
+              : 'bg-[var(--grand-gold)] text-zinc-900'
           }`}
         >
           {isAuction ? 'Lelang' : 'Beli Langsung'}

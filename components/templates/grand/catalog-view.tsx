@@ -31,8 +31,8 @@ export default function CatalogView({
   const totalPages = Math.max(1, Math.ceil(total / size));
 
   return (
-    <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
-      <header className="mb-8 flex flex-wrap items-center justify-between gap-4 border-b border-zinc-200 pb-6">
+    <main className="theme-grand mx-auto max-w-6xl px-4 py-8 sm:px-6">
+      <header className="mb-8 flex flex-wrap items-center justify-between gap-4 border-b-2 border-[var(--grand-peach)] pb-6">
         <h1 className="text-2xl font-semibold text-[var(--brand-primary)]">{market.name}</h1>
         {isLoggedIn ? (
           <Link

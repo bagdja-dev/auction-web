@@ -31,6 +31,28 @@
   --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
 }
 
+/* ───────────────────────────────────────────────────────────────────
+ * Tema template "grand" — SENGAJA beda dari Palet C `:root` di atas,
+ * supaya kelihatan jelas mana Market yang render template `default` vs
+ * `grand` (bukan cuma beda layout kartu, warnanya juga beda). Di-scope ke
+ * class `.theme-grand` (dipasang di root komponen
+ * `components/templates/grand/catalog-view.tsx`) — TIDAK menimpa `:root`
+ * global, jadi Toko Saya & template `default` tidak ikut berubah warna.
+ *
+ * Hex ESTIMASI VISUAL dari palet 5 warna yang diberikan user (screenshot),
+ * belum ada kode hex resmi — sesuaikan kalau ada source pastinya.
+ * ─────────────────────────────────────────────────────────────────── */
+.theme-grand {
+  --grand-crimson: #e81753; /* merah magenta/ruby */
+  --grand-orange: #f45d01; /* oranye terang */
+  --grand-gold: #fcc419; /* kuning emas */
+  --grand-brick: #b7202b; /* merah bata gelap */
+  --grand-peach: #f2c49b; /* peach/tan lembut */
+
+  --brand-primary: var(--grand-crimson);
+  --brand-primary-hover: var(--grand-brick);
+}
+
 html {
   scroll-behavior: smooth;
 }
