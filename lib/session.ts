@@ -1,28 +1,65 @@
 /**
- * Simple cookie-based session for storing JWT tokens (buyer/seller renderer
- * publik). Server-side only (used in Route Handlers and Server Components).
+ * Cookie-based session untuk renderer publik (buyer/seller) — multi-tenant
+ * subdomain wildcard (`{market_slug}.market.bagdja.com`), BUKAN single-host
+ * seperti admin console.
  *
- * Pola PERSIS dari `bagdja-auction-admin/src/lib/session.ts`. Nama cookie
- * SENGAJA beda dari admin (`am_buyer_token`/`am_buyer_user` vs `am_token`/
- * `am_user`) supaya tidak bentrok kalau admin & renderer dijalankan bersamaan
- * di localhost.
+ * OAuth `redirect_uri` wajib satu host tetap (teregistrasi, proteksi
+ * open-redirect) — callback SELALU jalan di host itu, BUKAN di subdomain
+ * tenant asal. Tanpa `Domain=.market.bagdja.com` di cookie, cookie itu
+ * ke-scope host-only ke host callback saja dan tidak pernah sampai ke
+ * subdomain tenant setelah redirect balik (lihat `app/auth/callback/route.ts`
+ * yang membaca `decoded.origin` dari `oauth-state-store.ts`).
  *
- * Cookie httpOnly `am_buyer_token` menyimpan JWT (tidak pernah dibaca client
- * JS — semua request ber-auth lewat BFF proxy, lihat app/api/proxy). Cookie
- * `am_buyer_user` non-httpOnly menyimpan info user ringkas untuk client
- * component (lihat hooks/use-auth.ts).
+ * Pola & fix persis di-port dari `bagdja-website/lib/session.ts` (BUG
+ * production 25 Agustus 2026 di sana: `Domain` attribute harus domain-match
+ * host yang BENAR-BENAR melayani response — RFC 6265 — kalau tidak, browser
+ * DIAM-DIAM membuang seluruh `Set-Cookie` itu). `getCookieOptions()` karena
+ * itu WAJIB terima `targetHostname` eksplisit (dari origin login asli),
+ * BUKAN diasumsikan dari `NEXT_PUBLIC_PLATFORM_URL` — dan di-skip total kalau
+ * hostname itu local (`LOCAL_HOSTS`, sama seperti middleware.ts) supaya
+ * perilaku dev lokal tidak bergantung isi env production.
+ *
+ * Write (`setSessionCookies`/`clearSessionCookies`) nempel langsung ke object
+ * `NextResponse` yang benar-benar di-return Route Handler (BUKAN lewat
+ * `cookies()` ambient) — mutasi cookie ambient yang di-attach ke response
+ * yang dikonstruksi belakangan terbukti tidak konsisten ke-merge di
+ * production di belakang reverse proxy (temuan yang sama di `bagdja-website`).
+ * Read (`getSession`) tetap lewat `cookies()` ambient — satu-satunya cara
+ * baca cookie di Server Component (read-only, tidak ada response untuk
+ * di-attach).
  */
 import { cookies } from 'next/headers';
+import type { NextResponse } from 'next/server';
 
 const TOKEN_COOKIE = 'am_buyer_token';
 const USER_COOKIE = 'am_buyer_user';
-const COOKIE_OPTIONS = {
-  httpOnly: true,
-  secure: process.env.NODE_ENV === 'production',
-  sameSite: 'lax' as const,
-  path: '/',
-  maxAge: 60 * 60 * 24, // 24 hours
-};
+
+/** Sama seperti middleware.ts — host dev lokal, tidak pernah domain-match subdomain wildcard produksi. */
+const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1']);
+
+function getCookieDomain(targetHostname: string): string | undefined {
+  if (LOCAL_HOSTS.has(targetHostname)) return undefined;
+
+  const platformUrl = process.env.NEXT_PUBLIC_PLATFORM_URL;
+  if (!platformUrl) return undefined;
+  try {
+    return `.${new URL(platformUrl).hostname}`;
+  } catch {
+    return undefined;
+  }
+}
+
+/** `targetHostname` = host yang benar-benar akan menerima response ini — WAJIB diisi benar, jangan diasumsikan dari env. */
+function getCookieOptions(targetHostname: string) {
+  return {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax' as const,
+    path: '/',
+    maxAge: 60 * 60 * 24, // 24 hours
+    domain: getCookieDomain(targetHostname),
+  };
+}
 
 export interface SessionUser {
   userId: string;
@@ -30,13 +67,37 @@ export interface SessionUser {
   username?: string;
 }
 
-export async function setSession(token: string, user: SessionUser) {
-  const jar = await cookies();
-  jar.set(TOKEN_COOKIE, token, COOKIE_OPTIONS);
-  jar.set(USER_COOKIE, JSON.stringify(user), {
-    ...COOKIE_OPTIONS,
-    httpOnly: false, // client needs to read user info
+/**
+ * Attach cookie sesi ke response yang akan di-return Route Handler.
+ * `targetOrigin` = origin (scheme+host) yang BENAR-BENAR akan menerima
+ * response ini — di callback route ini `decoded.origin` (origin login asli,
+ * lihat catatan di atas), BUKAN `request.url` (yang selalu host `redirect_uri`
+ * OAuth tetap).
+ */
+export function setSessionCookies(
+  response: NextResponse,
+  token: string,
+  user: SessionUser,
+  targetOrigin: string,
+): void {
+  const hostname = new URL(targetOrigin).hostname;
+  const cookieOptions = getCookieOptions(hostname);
+  response.cookies.set(TOKEN_COOKIE, token, cookieOptions);
+  response.cookies.set(USER_COOKIE, JSON.stringify(user), {
+    ...cookieOptions,
+    httpOnly: false, // client component (hooks/use-auth.ts) perlu baca info user
   });
+}
+
+/** Hapus cookie sesi dari response yang akan di-return Route Handler. `targetOrigin` — lihat catatan `setSessionCookies`. */
+export function clearSessionCookies(response: NextResponse, targetOrigin: string): void {
+  const hostname = new URL(targetOrigin).hostname;
+  const cookieOptions = getCookieOptions(hostname);
+  // Delete via .set(..., maxAge: 0) dengan domain/path yang SAMA persis
+  // dengan saat di-set — .delete(name) tanpa domain tidak akan match cookie
+  // yang di-set dengan Domain attribute (browser treat sebagai cookie beda).
+  response.cookies.set(TOKEN_COOKIE, '', { ...cookieOptions, maxAge: 0 });
+  response.cookies.set(USER_COOKIE, '', { ...cookieOptions, httpOnly: false, maxAge: 0 });
 }
 
 export async function getSession(): Promise<{
@@ -57,10 +118,4 @@ export async function getSession(): Promise<{
   }
 
   return { token, user };
-}
-
-export async function clearSession() {
-  const jar = await cookies();
-  jar.delete(TOKEN_COOKIE);
-  jar.delete(USER_COOKIE);
 }

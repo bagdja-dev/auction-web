@@ -16,6 +16,15 @@ const DEFAULT_TTL_SECONDS = 600;
 export interface OAuthStatePayload {
   codeVerifier: string;
   next: string | null;
+  /**
+   * Origin (scheme+host) tempat login DIMULAI — mis. `https://barang-antik.market.bagdja.com`.
+   * OAuth `redirect_uri` wajib satu host tetap, jadi callback SELALU jalan di
+   * host itu, BUKAN di subdomain tenant asal. Tanpa origin ini, callback tidak
+   * tahu harus redirect balik ke subdomain mana, dan cookie sesi (kalau
+   * di-set dengan `Domain` attribute) harus di-domain-match ke origin yang
+   * benar-benar melayani response (lihat `lib/session.ts`).
+   */
+  origin: string;
 }
 
 let cachedClient: Redis | null | undefined;

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { setSession } from '@/lib/session';
+import { setSessionCookies } from '@/lib/session';
 import { consumeOAuthState } from '@/lib/oauth-state-store';
 
 const AUTH_URL = process.env.NEXT_PUBLIC_AUTH_URL ?? 'https://login.bagdja.com';
@@ -61,20 +61,29 @@ export async function GET(request: NextRequest) {
       Buffer.from(accessToken.split('.')[1], 'base64').toString(),
     );
 
-    await setSession(accessToken, {
-      userId: payload.sub ?? payload.userId,
-      email: payload.email,
-      username: payload.username,
-    });
-
     const nextPath = decoded.next;
-
     const redirectTo =
       nextPath && nextPath.startsWith('/') && !nextPath.startsWith('//')
         ? nextPath
         : '/';
 
-    return NextResponse.redirect(new URL(redirectTo, request.url));
+    // Redirect balik ke origin login ASLI (subdomain tenant), BUKAN
+    // `request.url` (selalu host `redirect_uri` OAuth tetap) — lihat catatan
+    // di lib/session.ts soal kenapa ini juga menentukan Domain cookie.
+    const response = NextResponse.redirect(new URL(redirectTo, decoded.origin));
+
+    setSessionCookies(
+      response,
+      accessToken,
+      {
+        userId: payload.sub ?? payload.userId,
+        email: payload.email,
+        username: payload.username,
+      },
+      decoded.origin,
+    );
+
+    return response;
   } catch (err) {
     console.error('OAuth callback error:', err);
     return NextResponse.redirect(new URL('/?error=server_error', request.url));

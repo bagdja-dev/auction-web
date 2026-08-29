@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
   // bertahan lintas navigasi ke IdP dan balik lagi. `state` yang dikirim ke
   // IdP cuma ID pendek acak (lihat lib/oauth-state-store.ts).
   const stateId = generateStateId();
-  const saved = await saveOAuthState(stateId, { codeVerifier, next });
+  const saved = await saveOAuthState(stateId, { codeVerifier, next, origin: request.nextUrl.origin });
   if (!saved) {
     console.error('Upstash Redis belum dikonfigurasi (KV_REST_API_URL/TOKEN atau UPSTASH_REDIS_REST_URL/TOKEN)');
     return NextResponse.redirect(new URL('/?error=server_misconfigured', request.url));
