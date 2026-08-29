@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { ApiError, apiClient } from '@/lib/proxy-client';
 import type { Product } from '@/lib/types';
 import { useTokoSaya } from '../_components/toko-saya-context';
+import { PageTitle } from '../_components/page-title';
 import { ProductFormModal } from './product-form-modal';
 
 const currencyFormatter = new Intl.NumberFormat('id-ID', {
@@ -104,7 +105,7 @@ export default function ProdukContent() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-4">
-        <h1 className="text-lg font-semibold text-zinc-900">Produk Saya</h1>
+        <PageTitle>Produk Saya</PageTitle>
         <button
           type="button"
           onClick={openCreateModal}

@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { ApiError, apiClient } from '@/lib/proxy-client';
 import type { Seller, UpdateSellerPayload } from '@/lib/types';
 import { useTokoSaya } from '../_components/toko-saya-context';
+import { PageTitle } from '../_components/page-title';
 
 export default function PengaturanContent() {
   const { marketId, seller, refreshSeller } = useTokoSaya();
@@ -36,7 +37,7 @@ export default function PengaturanContent() {
 
   return (
     <div className="max-w-md space-y-4">
-      <h1 className="text-lg font-semibold text-zinc-900">Pengaturan Toko</h1>
+      <PageTitle>Pengaturan Toko</PageTitle>
 
       <form
         onSubmit={handleSubmit}
