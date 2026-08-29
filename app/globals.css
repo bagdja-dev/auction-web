@@ -1,0 +1,42 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* ───────────────────────────────────────────────────────────────
+   * Brand — Auction Market "Palet C"
+   *
+   * DRAFT / ESTIMASI VISUAL — belum final. Hex di bawah ini disalin persis
+   * dari `bagdja-auction-admin/src/app/globals.css` supaya konsisten lintas
+   * produk Auction Market (admin console & renderer publik). Ganti nilai-
+   * nilai ini begitu file desain final tersedia — TIDAK ada sistem
+   * multi-template pemilihan tema per Market di Fase 1 ini, jadi cukup satu
+   * tampilan default di sini.
+   * ─────────────────────────────────────────────────────────────── */
+  --palette-maroon: #a6180a; /* Merah marun */
+  --palette-orange-burn: #d34e0c; /* Oranye bakar */
+  --palette-mustard: #f6b900; /* Kuning mustard */
+  --palette-teal-blue: #0089a8; /* Teal-biru */
+  --palette-navy-dark: #142a63; /* Navy gelap */
+
+  --brand-primary: var(--palette-navy-dark);
+  --brand-primary-hover: #0d1f4d;
+
+  /* Token status — sama persis dengan bagdja-auction-admin. */
+  --brand-success: #22c55e;
+  --brand-warning: #facc15;
+  --brand-error: #ef4444;
+  --brand-info: #38bdf8;
+
+  --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
