@@ -55,3 +55,17 @@ export interface CreateProductPayload {
   auction_start_at?: string;
   auction_end_at?: string;
 }
+
+export type UpdateProductPayload = Partial<CreateProductPayload>;
+
+export interface UpdateSellerPayload {
+  shop_name?: string;
+}
+
+export interface WalletBalance {
+  id: string;
+  currency_code: string;
+  balance: number;
+  held_balance: number;
+  is_active: boolean;
+}
