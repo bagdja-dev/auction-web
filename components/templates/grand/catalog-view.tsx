@@ -32,7 +32,7 @@ export default function CatalogView({
 
   return (
     <main className="theme-grand mx-auto max-w-6xl px-4 py-8 sm:px-6">
-      <header className="mb-8 flex flex-wrap items-center justify-between gap-4 border-b-2 border-[var(--grand-peach)] pb-6">
+      <header className="sticky top-0 z-10 mb-8 flex flex-wrap items-center justify-between gap-4 border-b-2 border-[var(--grand-peach)] bg-white pb-6 pt-4">
         <h1 className="text-2xl font-semibold text-[var(--brand-primary)]">{market.name}</h1>
         {isLoggedIn ? (
           <Link

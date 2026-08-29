@@ -27,7 +27,7 @@ export default async function TokoSayaLayout({ children, params }: TokoSayaLayou
 
   return (
     <div className="min-h-screen bg-zinc-50">
-      <header className="border-b border-zinc-200 bg-white">
+      <header className="sticky top-0 z-10 border-b border-zinc-200 bg-white">
         <div className="mx-auto flex max-w-4xl items-center justify-between px-4 py-4 sm:px-6">
           <div>
             <p className="text-xs text-zinc-500">{market.name}</p>
