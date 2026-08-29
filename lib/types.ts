@@ -32,6 +32,8 @@ export interface Product {
   name: string;
   description: string | null;
   images: string[] | null;
+  video_url: string | null;
+  model3d_url: string | null;
   mode_jual: ProductModeJual;
   status: ProductStatus;
   price: number;
@@ -49,6 +51,8 @@ export interface CreateProductPayload {
   name: string;
   description?: string;
   images?: string[];
+  video_url?: string;
+  model3d_url?: string;
   mode_jual: ProductModeJual;
   price: number;
   min_increment?: number;

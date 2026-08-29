@@ -24,6 +24,8 @@ export interface ProductPublic {
   name: string;
   description: string | null;
   images: string[] | null;
+  video_url: string | null;
+  model3d_url: string | null;
   mode_jual: ProductModeJual;
   status: ProductStatus;
   price: number;

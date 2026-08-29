@@ -3,6 +3,9 @@
 import { useEffect, useState } from 'react';
 
 import { Modal } from '@/components/modal';
+import { GalleryEditor } from '@/components/upload/gallery-editor';
+import { Model3DUpload } from '@/components/upload/model3d-upload';
+import { VideoUpload } from '@/components/upload/video-upload';
 import { ApiError, apiClient } from '@/lib/proxy-client';
 import { slugify } from '@/lib/slugify';
 import type { CreateProductPayload, Product, ProductModeJual, UpdateProductPayload } from '@/lib/types';
@@ -25,7 +28,9 @@ interface FormState {
   minIncrement: string;
   auctionStartAt: string;
   auctionEndAt: string;
-  imagesText: string;
+  images: string[];
+  videoUrl: string | null;
+  model3dUrl: string | null;
 }
 
 const EMPTY_FORM: FormState = {
@@ -37,7 +42,9 @@ const EMPTY_FORM: FormState = {
   minIncrement: '',
   auctionStartAt: '',
   auctionEndAt: '',
-  imagesText: '',
+  images: [],
+  videoUrl: null,
+  model3dUrl: null,
 };
 
 /** ISO datetime -> value yang diterima <input type="datetime-local"> (tanpa detik/timezone). */
@@ -60,7 +67,9 @@ function productToForm(product: Product): FormState {
     minIncrement: product.min_increment != null ? String(product.min_increment) : '',
     auctionStartAt: toDatetimeLocal(product.auction_start_at),
     auctionEndAt: toDatetimeLocal(product.auction_end_at),
-    imagesText: product.images?.join('\n') ?? '',
+    images: product.images ?? [],
+    videoUrl: product.video_url,
+    model3dUrl: product.model3d_url,
   };
 }
 
@@ -100,16 +109,13 @@ export function ProductFormModal({ open, onClose, product, onSaved }: ProductFor
     setSaving(true);
     setError(null);
     try {
-      const images = form.imagesText
-        .split('\n')
-        .map((line) => line.trim())
-        .filter(Boolean);
-
       const payload: CreateProductPayload | UpdateProductPayload = {
         slug: form.slug || slugify(form.name),
         name: form.name,
         description: form.description || undefined,
-        images: images.length > 0 ? images : undefined,
+        images: form.images.length > 0 ? form.images : undefined,
+        video_url: form.videoUrl ?? undefined,
+        model3d_url: form.model3dUrl ?? undefined,
         mode_jual: form.modeJual,
         price: Number(form.price),
         min_increment: form.modeJual === 'AUCTION' && form.minIncrement ? Number(form.minIncrement) : undefined,
@@ -256,17 +262,18 @@ export function ProductFormModal({ open, onClose, product, onSaved }: ProductFor
         )}
 
         <div>
-          <label className="mb-1 block text-sm font-medium text-zinc-700">Gambar (satu URL per baris)</label>
-          <textarea
-            value={form.imagesText}
-            onChange={(e) => updateField('imagesText', e.target.value)}
-            rows={3}
-            placeholder={'https://example.com/foto1.jpg\nhttps://example.com/foto2.jpg'}
-            className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm font-mono focus:border-[var(--brand-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--brand-primary)]"
-          />
-          <p className="mt-1 text-xs text-zinc-400">
-            Upload file belum tersedia di Fase 1 ini — cukup tempel URL gambar.
-          </p>
+          <label className="mb-1 block text-sm font-medium text-zinc-700">Gambar Produk</label>
+          <GalleryEditor value={form.images} onChange={(images) => updateField('images', images)} />
+        </div>
+
+        <div>
+          <label className="mb-1 block text-sm font-medium text-zinc-700">Video Produk (opsional)</label>
+          <VideoUpload value={form.videoUrl} onChange={(url) => updateField('videoUrl', url)} />
+        </div>
+
+        <div>
+          <label className="mb-1 block text-sm font-medium text-zinc-700">Model 3D (opsional)</label>
+          <Model3DUpload value={form.model3dUrl} onChange={(url) => updateField('model3dUrl', url)} />
         </div>
 
         {error && <p className="text-sm text-[var(--brand-error)]">{error}</p>}

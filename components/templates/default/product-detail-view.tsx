@@ -1,5 +1,6 @@
 import Link from 'next/link';
 
+import { ModelViewerElement } from '@/components/upload/model-viewer-element';
 import type { ProductPublic } from '@/lib/api-client';
 
 export interface ProductDetailViewProps {
@@ -62,6 +63,30 @@ export default function ProductDetailView({ marketSlug, product }: ProductDetail
                   className="aspect-square w-full rounded-lg object-cover"
                 />
               ))}
+            </div>
+          )}
+
+          {product.video_url && (
+            <div>
+              <h2 className="mb-2 text-sm font-medium text-zinc-700">Video Produk</h2>
+              <video
+                src={product.video_url}
+                controls
+                playsInline
+                className="aspect-video w-full rounded-xl bg-black"
+              />
+            </div>
+          )}
+
+          {product.model3d_url && (
+            <div>
+              <h2 className="mb-2 text-sm font-medium text-zinc-700">Model 3D</h2>
+              <ModelViewerElement
+                src={product.model3d_url}
+                className="aspect-square w-full rounded-xl bg-zinc-100"
+                cameraControls
+                autoRotate
+              />
             </div>
           )}
         </div>
