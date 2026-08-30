@@ -63,7 +63,7 @@ export default function CatalogView({
       ) : (
         <div className="columns-2 gap-4 sm:columns-3 lg:columns-4">
           {items.map((product) => (
-            <ProductCardGrand key={product.id} marketSlug={marketSlug} product={product} />
+            <ProductCardGrand key={product.id} marketSlug={marketSlug} product={product} market={market} />
           ))}
         </div>
       )}

@@ -1,6 +1,7 @@
 import Link from 'next/link';
 
-import type { ProductPublic } from '@/lib/api-client';
+import type { Market, ProductPublic } from '@/lib/api-client';
+import { getCatalogStatusLabel } from '@/lib/product-status';
 
 const currencyFormatter = new Intl.NumberFormat('id-ID', {
   style: 'currency',
@@ -23,12 +24,15 @@ function formatDate(iso: string | null): string {
 export default function ProductCardGrand({
   marketSlug,
   product,
+  market,
 }: {
   marketSlug: string;
   product: ProductPublic;
+  market: Market;
 }) {
   const isAuction = product.mode_jual === 'AUCTION';
   const cover = product.images?.[0] ?? null;
+  const statusLabel = getCatalogStatusLabel(product, market);
 
   return (
     <Link href={`/${marketSlug}/products/${product.slug}`} className="group mb-4 block break-inside-avoid">
@@ -54,6 +58,13 @@ export default function ProductCardGrand({
         >
           {isAuction ? 'Lelang' : 'Beli Langsung'}
         </span>
+        {statusLabel && (
+          <span
+            className={`absolute right-3 top-3 rounded-full px-2.5 py-1 text-[11px] font-semibold shadow ${statusLabel.className}`}
+          >
+            {statusLabel.text}
+          </span>
+        )}
       </div>
 
       <div className="px-0.5 pt-2.5">

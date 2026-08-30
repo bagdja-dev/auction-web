@@ -18,6 +18,7 @@ export interface Market {
   domain: string | null;
   template_id: string | null;
   is_active: boolean;
+  registration_deadline_minutes: number | null;
 }
 
 export interface ProductPublic {
