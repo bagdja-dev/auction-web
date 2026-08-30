@@ -325,14 +325,27 @@ export default function ProductDetailView({ marketSlug, product }: ProductDetail
             <p className="whitespace-pre-line text-sm leading-relaxed text-zinc-700">{product.description}</p>
           )}
 
-          <button
-            type="button"
-            disabled
-            title="Fitur checkout/bidding segera hadir"
-            className="mt-2 w-full cursor-not-allowed rounded-lg bg-zinc-300 px-4 py-3 text-sm font-medium text-zinc-500"
-          >
-            {isAuction ? 'Ikut Lelang' : 'Beli Sekarang'} — Segera Hadir
-          </button>
+          {isAuction ? (
+            <button
+              type="button"
+              disabled
+              title="Fitur bidding segera hadir"
+              className="mt-2 w-full cursor-not-allowed rounded-lg bg-zinc-300 px-4 py-3 text-sm font-medium text-zinc-500"
+            >
+              Ikut Lelang — Segera Hadir
+            </button>
+          ) : product.status === 'published' ? (
+            <Link
+              href={`/${marketSlug}/products/${product.slug}/checkout`}
+              className="mt-2 block w-full rounded-lg bg-[var(--brand-primary)] px-4 py-3 text-center text-sm font-medium text-white transition hover:bg-[var(--brand-primary-hover)]"
+            >
+              Beli Sekarang
+            </Link>
+          ) : (
+            <span className="mt-2 block w-full rounded-lg bg-zinc-200 px-4 py-3 text-center text-sm font-medium text-zinc-500">
+              Sudah Terjual
+            </span>
+          )}
         </div>
       </div>
 

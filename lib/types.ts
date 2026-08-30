@@ -73,3 +73,32 @@ export interface WalletBalance {
   held_balance: number;
   is_active: boolean;
 }
+
+export type OrderStatus = 'PENDING_PAYMENT' | 'HELD' | 'FAILED';
+
+export interface Order {
+  id: string;
+  market_id: string;
+  product_id: string;
+  seller_id: string;
+  buyer_user_id: string;
+  recipient_name: string;
+  phone: string;
+  address: string;
+  courier: string | null;
+  total_amount: number;
+  currency: string;
+  escrow_id: string | null;
+  payment_request_id: string | null;
+  checkout_url: string | null;
+  status: OrderStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CheckoutPayload {
+  recipient_name: string;
+  phone: string;
+  address: string;
+  courier?: string;
+}
