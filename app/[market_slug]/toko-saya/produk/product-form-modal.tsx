@@ -31,6 +31,10 @@ interface FormState {
   images: string[];
   videoUrl: string | null;
   model3dUrl: string | null;
+  weightGrams: string;
+  lengthCm: string;
+  widthCm: string;
+  heightCm: string;
 }
 
 const EMPTY_FORM: FormState = {
@@ -45,6 +49,10 @@ const EMPTY_FORM: FormState = {
   images: [],
   videoUrl: null,
   model3dUrl: null,
+  weightGrams: '',
+  lengthCm: '',
+  widthCm: '',
+  heightCm: '',
 };
 
 /** ISO datetime -> value yang diterima <input type="datetime-local"> (tanpa detik/timezone). */
@@ -70,6 +78,10 @@ function productToForm(product: Product): FormState {
     images: product.images ?? [],
     videoUrl: product.video_url,
     model3dUrl: product.model3d_url,
+    weightGrams: product.weight_grams != null ? String(product.weight_grams) : '',
+    lengthCm: product.length_cm != null ? String(product.length_cm) : '',
+    widthCm: product.width_cm != null ? String(product.width_cm) : '',
+    heightCm: product.height_cm != null ? String(product.height_cm) : '',
   };
 }
 
@@ -127,6 +139,10 @@ export function ProductFormModal({ open, onClose, product, onSaved }: ProductFor
           form.modeJual === 'AUCTION' && form.auctionEndAt
             ? new Date(form.auctionEndAt).toISOString()
             : undefined,
+        weight_grams: form.weightGrams ? Number(form.weightGrams) : undefined,
+        length_cm: form.lengthCm ? Number(form.lengthCm) : undefined,
+        width_cm: form.widthCm ? Number(form.widthCm) : undefined,
+        height_cm: form.heightCm ? Number(form.heightCm) : undefined,
       };
 
       if (isEdit && product) {
@@ -274,6 +290,55 @@ export function ProductFormModal({ open, onClose, product, onSaved }: ProductFor
         <div>
           <label className="mb-1 block text-sm font-medium text-zinc-700">Model 3D (opsional)</label>
           <Model3DUpload value={form.model3dUrl} onChange={(url) => updateField('model3dUrl', url)} />
+        </div>
+
+        <div>
+          <label className="mb-1 block text-sm font-medium text-zinc-700">Berat &amp; Dimensi (opsional)</label>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div>
+              <label className="mb-1 block text-xs text-zinc-500">Berat (gram)</label>
+              <input
+                type="number"
+                min={0}
+                value={form.weightGrams}
+                onChange={(e) => updateField('weightGrams', e.target.value)}
+                className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-[var(--brand-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--brand-primary)]"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs text-zinc-500">Panjang (cm)</label>
+              <input
+                type="number"
+                min={0}
+                value={form.lengthCm}
+                onChange={(e) => updateField('lengthCm', e.target.value)}
+                className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-[var(--brand-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--brand-primary)]"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs text-zinc-500">Lebar (cm)</label>
+              <input
+                type="number"
+                min={0}
+                value={form.widthCm}
+                onChange={(e) => updateField('widthCm', e.target.value)}
+                className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-[var(--brand-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--brand-primary)]"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs text-zinc-500">Tinggi (cm)</label>
+              <input
+                type="number"
+                min={0}
+                value={form.heightCm}
+                onChange={(e) => updateField('heightCm', e.target.value)}
+                className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-[var(--brand-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--brand-primary)]"
+              />
+            </div>
+          </div>
+          <p className="mt-1 text-xs text-zinc-400">
+            Opsional — kalau kosong dipakai default 250g/30×30×5cm untuk hitung ongkir.
+          </p>
         </div>
 
         {error && <p className="text-sm text-[var(--brand-error)]">{error}</p>}

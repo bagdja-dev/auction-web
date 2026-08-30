@@ -4,6 +4,8 @@
  * dengan `next: { revalidate }`) sama seperti `bagdja-website/lib/api-client.ts`.
  */
 
+import type { ShippingArea } from './types';
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5010';
 
 export type ProductModeJual = 'AUCTION' | 'DIRECT_SELL';
@@ -34,6 +36,10 @@ export interface ProductPublic {
   auction_end_at: string | null;
   created_at: string;
   seller_shop_name: string | null;
+  weight_grams?: number | null;
+  length_cm?: number | null;
+  width_cm?: number | null;
+  height_cm?: number | null;
 }
 
 export interface PaginatedResult<T> {
@@ -87,4 +93,20 @@ export function getMarketProductBySlug(
   return fetchPublic<ProductPublic>(
     `/api/public/markets/${encodeURIComponent(slug)}/products/${encodeURIComponent(productSlug)}`,
   );
+}
+
+/**
+ * Cari area tujuan pengiriman (no-auth) — dipanggil langsung dari browser
+ * (bukan lewat BFF proxy, karena publik & `NEXT_PUBLIC_API_URL` sudah
+ * di-inline ke bundle client). Dipakai `ShippingAreaAutocomplete`.
+ */
+export async function searchShippingAreas(query: string): Promise<ShippingArea[]> {
+  const trimmed = query.trim();
+  if (!trimmed) return [];
+  const res = await fetch(`${API_URL}/api/public/shipping/areas?q=${encodeURIComponent(trimmed)}`, {
+    cache: 'no-store',
+  });
+  if (!res.ok) return [];
+  const data = await res.json().catch(() => null);
+  return Array.isArray(data) ? data : [];
 }

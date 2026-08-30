@@ -15,6 +15,8 @@ export interface Seller {
   shop_name: string | null;
   email: string | null;
   is_active: boolean;
+  /** Nama area asal pengiriman (hasil pilih dari shipping area search) — WAJIB diisi sebelum produk seller ini bisa dibeli. */
+  shipping_origin_area_name: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -42,6 +44,11 @@ export interface Product {
   auction_end_at: string | null;
   stock: number;
   re_listed_from_id: string | null;
+  /** Berat/dimensi untuk hitung ongkir — default kalau kosong: 250g, 30x30x5cm. */
+  weight_grams: number | null;
+  length_cm: number | null;
+  width_cm: number | null;
+  height_cm: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -58,12 +65,33 @@ export interface CreateProductPayload {
   min_increment?: number;
   auction_start_at?: string;
   auction_end_at?: string;
+  weight_grams?: number | null;
+  length_cm?: number | null;
+  width_cm?: number | null;
+  height_cm?: number | null;
 }
 
 export type UpdateProductPayload = Partial<CreateProductPayload>;
 
 export interface UpdateSellerPayload {
   shop_name?: string;
+  shipping_origin_area_name?: string;
+}
+
+/** Hasil `GET /api/public/shipping/areas?q=` — no-auth, dipakai autocomplete alamat tujuan. */
+export interface ShippingArea {
+  providerAreaId: string;
+  name: string;
+  type: string;
+}
+
+/** Hasil `POST /api/markets/:marketId/products/:productId/shipping/cost`. */
+export interface ShippingCostOption {
+  courierCode: string;
+  serviceName: string;
+  cost: number;
+  etdMinDays?: number;
+  etdMaxDays?: number;
 }
 
 export interface WalletBalance {
@@ -85,7 +113,6 @@ export interface Order {
   recipient_name: string;
   phone: string;
   address: string;
-  courier: string | null;
   total_amount: number;
   currency: string;
   escrow_id: string | null;
@@ -94,11 +121,19 @@ export interface Order {
   status: OrderStatus;
   created_at: string;
   updated_at: string;
+  shipping_cost: number;
+  destination_area_id: string;
+  destination_area_name: string | null;
+  courier_code: string;
+  courier_service_name: string | null;
 }
 
 export interface CheckoutPayload {
   recipient_name: string;
   phone: string;
   address: string;
-  courier?: string;
+  destination_area_id: string;
+  destination_area_name?: string;
+  courier_code: string;
+  courier_service_name?: string;
 }

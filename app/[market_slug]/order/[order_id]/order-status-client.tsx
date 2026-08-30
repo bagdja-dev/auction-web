@@ -116,11 +116,19 @@ export function OrderStatusClient({ marketSlug, marketId, orderId, statusHint }:
             <p>
               <span className="text-zinc-500">Alamat:</span> {order.address}
             </p>
-            {order.courier && (
+            <p>
+              <span className="text-zinc-500">Tujuan:</span>{' '}
+              {order.destination_area_name || order.destination_area_id}
+            </p>
+            {order.courier_code && (
               <p>
-                <span className="text-zinc-500">Kurir:</span> {order.courier}
+                <span className="text-zinc-500">Kurir:</span> {order.courier_code.toUpperCase()}
+                {order.courier_service_name ? ` — ${order.courier_service_name}` : ''}
               </p>
             )}
+            <p>
+              <span className="text-zinc-500">Ongkir:</span> {currencyFormatter.format(order.shipping_cost)}
+            </p>
           </div>
         )}
         <Link

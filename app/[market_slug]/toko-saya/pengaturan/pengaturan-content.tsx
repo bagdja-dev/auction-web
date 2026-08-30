@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 
+import { ShippingAreaAutocomplete, type ShippingAreaSelection } from '@/components/shipping-area-autocomplete';
 import { ApiError, apiClient } from '@/lib/proxy-client';
 import type { Seller, UpdateSellerPayload } from '@/lib/types';
 import { useTokoSaya } from '../_components/toko-saya-context';
@@ -11,6 +12,11 @@ export default function PengaturanContent() {
   const { marketId, seller, refreshSeller } = useTokoSaya();
 
   const [shopName, setShopName] = useState(seller.shop_name ?? '');
+  const [shippingOrigin, setShippingOrigin] = useState<ShippingAreaSelection | null>(
+    seller.shipping_origin_area_name
+      ? { providerAreaId: '', name: seller.shipping_origin_area_name }
+      : null,
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -21,7 +27,10 @@ export default function PengaturanContent() {
     setError(null);
     setSuccess(false);
     try {
-      const payload: UpdateSellerPayload = { shop_name: shopName };
+      const payload: UpdateSellerPayload = {
+        shop_name: shopName,
+        shipping_origin_area_name: shippingOrigin?.name || undefined,
+      };
       await apiClient<Seller>(`/api/markets/${marketId}/sellers/me`, {
         method: 'PATCH',
         body: JSON.stringify(payload),
@@ -52,6 +61,18 @@ export default function PengaturanContent() {
             placeholder="Toko Saya"
             className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-[var(--brand-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--brand-primary)]"
           />
+        </div>
+
+        <div>
+          <label className="mb-1 block text-sm font-medium text-zinc-700">Lokasi Asal Pengiriman</label>
+          <ShippingAreaAutocomplete
+            value={shippingOrigin}
+            onChange={setShippingOrigin}
+            placeholder="Cari kota/kecamatan asal pengiriman..."
+          />
+          <p className="mt-1 text-xs text-zinc-400">
+            Wajib diisi sebelum produk Anda bisa dibeli — dipakai untuk menghitung ongkir ke pembeli.
+          </p>
         </div>
 
         {error && <p className="text-sm text-[var(--brand-error)]">{error}</p>}
