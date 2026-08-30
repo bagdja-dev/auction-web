@@ -475,6 +475,7 @@ function BiddingSection({
 
   const [history, setHistory] = useState<AuctionBid[] | null>(null);
   const [historyLoading, setHistoryLoading] = useState(true);
+  const [showHistory, setShowHistory] = useState(false);
 
   const hasStarted = !auctionStartAt || nowMs >= new Date(auctionStartAt).getTime();
   const hasEnded = productStatus !== 'published' || (!!auctionEndAt && nowMs >= new Date(auctionEndAt).getTime());
@@ -500,6 +501,20 @@ function BiddingSection({
     refreshHistory();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [marketId, productId]);
+
+  useEffect(() => {
+    if (!showHistory) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setShowHistory(false);
+    };
+    document.addEventListener('keydown', onKeyDown);
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [showHistory]);
 
   // Polling harga tertinggi + status produk (fetch publik, tanpa proxy) — STOP begitu lelang berakhir.
   useEffect(() => {
@@ -549,7 +564,16 @@ function BiddingSection({
         <p className="text-sm font-medium text-green-800">Deposit terverifikasi — Anda bisa ikut menawar.</p>
       </div>
 
-      <HighestBidSummary highestBid={highestBid} startingPrice={startingPrice} />
+      <div className="flex items-start justify-between gap-2">
+        <HighestBidSummary highestBid={highestBid} startingPrice={startingPrice} />
+        <button
+          type="button"
+          onClick={() => setShowHistory(true)}
+          className="shrink-0 rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 transition hover:border-[var(--brand-primary)] hover:text-[var(--brand-primary)]"
+        >
+          Riwayat Tawaran
+        </button>
+      </div>
 
       {!hasStarted && (
         <p className="text-sm text-amber-700">Lelang belum dimulai — dibuka pada {formatDateTime(auctionStartAt)}.</p>
@@ -585,23 +609,48 @@ function BiddingSection({
         </form>
       )}
 
-      <div>
-        <p className="mb-2 text-sm font-medium text-zinc-700">Riwayat Tawaran</p>
-        {historyLoading ? (
-          <p className="text-xs text-zinc-400">Memuat…</p>
-        ) : history && history.length > 0 ? (
-          <ul className="max-h-48 space-y-1 overflow-y-auto rounded-lg border border-zinc-200 bg-white p-2 text-sm text-zinc-600">
-            {history.map((bid) => (
-              <li key={bid.id} className="flex items-center justify-between border-b border-zinc-100 py-1 last:border-0">
-                <span className="text-zinc-500">Peserta — {formatDateTime(bid.created_at)}</span>
-                <span className="font-medium text-zinc-900">{currencyFormatter.format(bid.amount)}</span>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="text-xs text-zinc-400">Belum ada tawaran.</p>
-        )}
-      </div>
+      {showHistory && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4"
+          onClick={() => setShowHistory(false)}
+        >
+          <div
+            className="max-h-[80vh] w-full overflow-hidden rounded-t-2xl bg-white sm:max-w-sm sm:rounded-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-zinc-200 p-4">
+              <p className="text-sm font-medium text-zinc-700">Riwayat Tawaran</p>
+              <button
+                type="button"
+                onClick={() => setShowHistory(false)}
+                aria-label="Tutup"
+                className="flex h-7 w-7 items-center justify-center rounded-full text-zinc-500 transition hover:bg-zinc-100"
+              >
+                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                  <path d="M6 6l12 12M18 6 6 18" strokeLinecap="round" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="max-h-[calc(80vh-57px)] overflow-y-auto p-4">
+              {historyLoading ? (
+                <p className="text-xs text-zinc-400">Memuat…</p>
+              ) : history && history.length > 0 ? (
+                <ul className="space-y-1 text-sm text-zinc-600">
+                  {history.map((bid) => (
+                    <li key={bid.id} className="flex items-center justify-between border-b border-zinc-100 py-1.5 last:border-0">
+                      <span className="text-zinc-500">Peserta — {formatDateTime(bid.created_at)}</span>
+                      <span className="font-medium text-zinc-900">{currencyFormatter.format(bid.amount)}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-xs text-zinc-400">Belum ada tawaran.</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
