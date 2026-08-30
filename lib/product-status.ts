@@ -42,25 +42,33 @@ export function getCatalogStatusLabel(
   >,
   market: Pick<Market, 'registration_deadline_minutes'>,
 ): CatalogStatusLabel | null {
+  const now = Date.now();
+  const start = product.auction_start_at ? new Date(product.auction_start_at).getTime() : null;
+  const end = product.auction_end_at ? new Date(product.auction_end_at).getTime() : null;
+
+  // Dicek dari WAKTU + `current_highest_bid` (bukan cuma `status === 'sold'`)
+  // supaya harga pemenang langsung tampil begitu auction_end_at lewat, tanpa
+  // menunggu scheduler penutup lelang (BullMQ) sempat ubah status di DB --
+  // job itu async, bisa telat/belum jalan sama sekali (mis. Redis belum
+  // disiapkan), tapi dari sisi waktu lelangnya SUDAH pasti berakhir.
+  if (product.mode_jual === 'AUCTION' && end != null && now >= end && product.current_highest_bid != null) {
+    return {
+      text: 'Dimenangkan',
+      subtext: currencyFormatter.format(product.current_highest_bid),
+      className: '',
+      variant: 'stamp',
+    };
+  }
+
   if (product.status === 'sold') {
-    if (product.mode_jual === 'AUCTION' && product.current_highest_bid != null) {
-      return {
-        text: 'Dimenangkan',
-        subtext: currencyFormatter.format(product.current_highest_bid),
-        className: '',
-        variant: 'stamp',
-      };
-    }
+    // DIRECT_SELL sold, atau AUCTION 'sold' tapi entah kenapa tanpa
+    // current_highest_bid tercatat (seharusnya tidak terjadi, jaga-jaga).
     return { text: 'Terjual', className: '', variant: 'stamp' };
   }
 
   if (product.mode_jual !== 'AUCTION' || product.status !== 'published') {
     return null;
   }
-
-  const now = Date.now();
-  const start = product.auction_start_at ? new Date(product.auction_start_at).getTime() : null;
-  const end = product.auction_end_at ? new Date(product.auction_end_at).getTime() : null;
 
   if (start != null && now >= start && (end == null || now < end)) {
     return { text: 'Lelang berlangsung', className: 'bg-[var(--brand-primary)] text-white', variant: 'pill' };

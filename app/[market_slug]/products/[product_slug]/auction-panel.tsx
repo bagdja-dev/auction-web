@@ -649,11 +649,14 @@ function BiddingSection({
 
       {hasEnded ? (
         <p className="text-sm font-medium text-zinc-700">
-          {productStatus === 'sold'
-            ? 'Lelang telah berakhir dengan pemenang.'
-            : productStatus === 'expired'
-              ? 'Lelang telah berakhir tanpa penawar.'
-              : 'Lelang telah berakhir.'}
+          {/* Dicek dari `highestBid` (bukan `productStatus`) supaya tetap
+              benar meski scheduler penutup lelang belum sempat ubah status
+              ke sold/expired (mis. Redis/BullMQ belum jalan) — harga
+              pemenang harus langsung tampil begitu waktu lelang berakhir,
+              tidak menunggu job async. */}
+          {highestBid != null
+            ? `Lelang telah berakhir — dimenangkan dengan tawaran ${currencyFormatter.format(highestBid)}.`
+            : 'Lelang telah berakhir tanpa penawar.'}
         </p>
       ) : readOnly ? null : (
         <form onSubmit={handleSubmitBid} className="space-y-2">
