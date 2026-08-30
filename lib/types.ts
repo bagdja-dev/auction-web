@@ -15,8 +15,6 @@ export interface Seller {
   shop_name: string | null;
   email: string | null;
   is_active: boolean;
-  /** Nama area asal pengiriman (hasil pilih dari shipping area search) — WAJIB diisi sebelum produk seller ini bisa dibeli. */
-  shipping_origin_area_name: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -49,6 +47,8 @@ export interface Product {
   length_cm: number | null;
   width_cm: number | null;
   height_cm: number | null;
+  /** Nama area asal pengiriman produk ini (hasil pilih dari shipping area search) — WAJIB diisi sebelum produk ini bisa dibeli. */
+  shipping_origin_area_name: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -69,13 +69,13 @@ export interface CreateProductPayload {
   length_cm?: number | null;
   width_cm?: number | null;
   height_cm?: number | null;
+  shipping_origin_area_name?: string | null;
 }
 
 export type UpdateProductPayload = Partial<CreateProductPayload>;
 
 export interface UpdateSellerPayload {
   shop_name?: string;
-  shipping_origin_area_name?: string;
 }
 
 /** Hasil `GET /api/public/shipping/areas?q=` — no-auth, dipakai autocomplete alamat tujuan. */

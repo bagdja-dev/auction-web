@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 
 import { Modal } from '@/components/modal';
+import { ShippingAreaAutocomplete, type ShippingAreaSelection } from '@/components/shipping-area-autocomplete';
 import { GalleryEditor } from '@/components/upload/gallery-editor';
 import { Model3DUpload } from '@/components/upload/model3d-upload';
 import { VideoUpload } from '@/components/upload/video-upload';
@@ -35,6 +36,7 @@ interface FormState {
   lengthCm: string;
   widthCm: string;
   heightCm: string;
+  shippingOrigin: ShippingAreaSelection | null;
 }
 
 const EMPTY_FORM: FormState = {
@@ -53,6 +55,7 @@ const EMPTY_FORM: FormState = {
   lengthCm: '',
   widthCm: '',
   heightCm: '',
+  shippingOrigin: null,
 };
 
 /** ISO datetime -> value yang diterima <input type="datetime-local"> (tanpa detik/timezone). */
@@ -82,6 +85,9 @@ function productToForm(product: Product): FormState {
     lengthCm: product.length_cm != null ? String(product.length_cm) : '',
     widthCm: product.width_cm != null ? String(product.width_cm) : '',
     heightCm: product.height_cm != null ? String(product.height_cm) : '',
+    shippingOrigin: product.shipping_origin_area_name
+      ? { providerAreaId: '', name: product.shipping_origin_area_name }
+      : null,
   };
 }
 
@@ -143,6 +149,7 @@ export function ProductFormModal({ open, onClose, product, onSaved }: ProductFor
         length_cm: form.lengthCm ? Number(form.lengthCm) : undefined,
         width_cm: form.widthCm ? Number(form.widthCm) : undefined,
         height_cm: form.heightCm ? Number(form.heightCm) : undefined,
+        shipping_origin_area_name: form.shippingOrigin?.name || undefined,
       };
 
       if (isEdit && product) {
@@ -338,6 +345,18 @@ export function ProductFormModal({ open, onClose, product, onSaved }: ProductFor
           </div>
           <p className="mt-1 text-xs text-zinc-400">
             Opsional — kalau kosong dipakai default 250g/30×30×5cm untuk hitung ongkir.
+          </p>
+        </div>
+
+        <div>
+          <label className="mb-1 block text-sm font-medium text-zinc-700">Lokasi Asal Pengiriman</label>
+          <ShippingAreaAutocomplete
+            value={form.shippingOrigin}
+            onChange={(area) => updateField('shippingOrigin', area)}
+            placeholder="Cari kota/kecamatan asal pengiriman produk ini..."
+          />
+          <p className="mt-1 text-xs text-zinc-400">
+            Wajib diisi sebelum produk ini bisa dihitung ongkirnya/dibeli pembeli.
           </p>
         </div>
 
