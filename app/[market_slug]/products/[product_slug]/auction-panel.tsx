@@ -495,7 +495,11 @@ function BiddingSection({
   const [productStatus, setProductStatus] = useState<ProductStatus>(initialProductStatus);
   const [nowMs, setNowMs] = useState(() => Date.now());
 
-  const [bidAmount, setBidAmount] = useState('');
+  const minNextBid = highestBid != null ? highestBid + (minIncrement ?? 1) : startingPrice;
+
+  // Pre-isi nominal tawaran dengan minimum saat ini (bukan cuma placeholder) —
+  // buyer bisa langsung tekan "Ajukan Tawaran" tanpa mengetik apa-apa.
+  const [bidAmount, setBidAmount] = useState(() => String(minNextBid));
   const [submitting, setSubmitting] = useState(false);
   const [bidError, setBidError] = useState<string | null>(null);
 
@@ -560,17 +564,15 @@ function BiddingSection({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [marketSlug, productSlug, hasEnded]);
 
-  const minNextBid = highestBid != null ? highestBid + (minIncrement ?? 1) : startingPrice;
-
   // Tawaran tertinggi bisa naik lewat polling (bukan aksi user ini, mis. bidder
-  // lain lebih cepat) — kalau nominal yang lagi diketik jadi lebih kecil dari
-  // minimum baru, langsung sesuaikan ke minimum baru itu supaya user tidak
-  // submit tawaran yang pasti ditolak backend.
+  // lain lebih cepat) — kalau nominal yang lagi diketik kosong atau lebih
+  // kecil dari minimum baru, langsung sesuaikan ke minimum baru itu supaya
+  // buyer tinggal tekan "Ajukan Tawaran" dan tidak submit tawaran yang pasti
+  // ditolak backend.
   useEffect(() => {
     setBidAmount((current) => {
-      if (current === '') return current;
       const currentAmount = Number(current);
-      if (!Number.isNaN(currentAmount) && currentAmount < minNextBid) {
+      if (current === '' || Number.isNaN(currentAmount) || currentAmount < minNextBid) {
         return String(minNextBid);
       }
       return current;
