@@ -102,6 +102,43 @@ export default function ProdukContent() {
     }
   }
 
+  /** "Turunkan" — batalkan publikasi, produk balik jadi draft (bukan dihapus). */
+  async function handleUnpublish(productId: string) {
+    setBusyId(productId);
+    setRowError((prev) => ({ ...prev, [productId]: '' }));
+    try {
+      await apiClient<Product>(`/api/markets/${marketId}/products/${productId}/unpublish`, { method: 'POST' });
+      await loadProducts();
+    } catch (err) {
+      setRowError((prev) => ({
+        ...prev,
+        [productId]: err instanceof ApiError ? err.message : 'Gagal menurunkan produk.',
+      }));
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  /** Duplikat produk (status apapun) jadi draft baru, lalu langsung buka modal edit untuk disesuaikan. */
+  async function handleDuplicate(productId: string) {
+    setBusyId(productId);
+    setRowError((prev) => ({ ...prev, [productId]: '' }));
+    try {
+      const copy = await apiClient<Product>(`/api/markets/${marketId}/products/${productId}/duplicate`, {
+        method: 'POST',
+      });
+      await loadProducts();
+      openEditModal(copy);
+    } catch (err) {
+      setRowError((prev) => ({
+        ...prev,
+        [productId]: err instanceof ApiError ? err.message : 'Gagal menduplikat produk.',
+      }));
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-4">
@@ -164,34 +201,55 @@ export default function ProdukContent() {
                     <p className="text-xs text-[var(--brand-error)]">{rowError[product.id]}</p>
                   )}
 
-                  {isDraft && (
-                    <div className="mt-auto flex flex-wrap gap-1.5 pt-2">
+                  <div className="mt-auto flex flex-wrap gap-1.5 pt-2">
+                    {isDraft && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => openEditModal(product)}
+                          disabled={busyId === product.id}
+                          className="rounded-md border border-zinc-300 px-2.5 py-1 text-xs font-medium text-zinc-700 transition hover:bg-zinc-50 disabled:opacity-50"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handlePublish(product.id)}
+                          disabled={busyId === product.id}
+                          className="rounded-md bg-[var(--brand-primary)] px-2.5 py-1 text-xs font-medium text-white transition hover:bg-[var(--brand-primary-hover)] disabled:opacity-50"
+                        >
+                          {busyId === product.id ? '…' : 'Publish'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(product.id)}
+                          disabled={busyId === product.id}
+                          className="rounded-md border border-[var(--brand-error)] px-2.5 py-1 text-xs font-medium text-[var(--brand-error)] transition hover:bg-red-50 disabled:opacity-50"
+                        >
+                          Hapus
+                        </button>
+                      </>
+                    )}
+                    {product.status === 'published' && (
                       <button
                         type="button"
-                        onClick={() => openEditModal(product)}
+                        onClick={() => handleUnpublish(product.id)}
                         disabled={busyId === product.id}
-                        className="rounded-md border border-zinc-300 px-2.5 py-1 text-xs font-medium text-zinc-700 transition hover:bg-zinc-50 disabled:opacity-50"
+                        className="rounded-md border border-amber-300 px-2.5 py-1 text-xs font-medium text-amber-700 transition hover:bg-amber-50 disabled:opacity-50"
                       >
-                        Edit
+                        {busyId === product.id ? '…' : 'Turunkan'}
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => handlePublish(product.id)}
-                        disabled={busyId === product.id}
-                        className="rounded-md bg-[var(--brand-primary)] px-2.5 py-1 text-xs font-medium text-white transition hover:bg-[var(--brand-primary-hover)] disabled:opacity-50"
-                      >
-                        {busyId === product.id ? '…' : 'Publish'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDelete(product.id)}
-                        disabled={busyId === product.id}
-                        className="rounded-md border border-[var(--brand-error)] px-2.5 py-1 text-xs font-medium text-[var(--brand-error)] transition hover:bg-red-50 disabled:opacity-50"
-                      >
-                        Hapus
-                      </button>
-                    </div>
-                  )}
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => handleDuplicate(product.id)}
+                      disabled={busyId === product.id}
+                      title="Duplikat produk ini jadi draft baru"
+                      className="rounded-md border border-zinc-300 px-2.5 py-1 text-xs font-medium text-zinc-700 transition hover:bg-zinc-50 disabled:opacity-50"
+                    >
+                      Duplikat
+                    </button>
+                  </div>
                 </div>
               </div>
             );
