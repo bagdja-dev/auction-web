@@ -61,7 +61,7 @@ export default function ProductCardGrand({
         </span>
         {statusLabel &&
           (statusLabel.variant === 'stamp' ? (
-            <SoldStamp text={statusLabel.text} />
+            <SoldStamp text={statusLabel.text} subtext={statusLabel.subtext} />
           ) : (
             <span
               className={`absolute right-3 top-3 rounded-full px-2.5 py-1 text-[11px] font-semibold shadow ${statusLabel.className}`}

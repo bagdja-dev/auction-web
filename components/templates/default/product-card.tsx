@@ -59,7 +59,7 @@ export default function ProductCard({
         </span>
         {statusLabel &&
           (statusLabel.variant === 'stamp' ? (
-            <SoldStamp text={statusLabel.text} />
+            <SoldStamp text={statusLabel.text} subtext={statusLabel.subtext} />
           ) : (
             <span
               className={`absolute right-2 top-2 rounded-full px-2 py-1 text-xs font-medium ${statusLabel.className}`}

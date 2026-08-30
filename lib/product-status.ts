@@ -1,13 +1,23 @@
 import type { Market, ProductPublic } from './api-client';
 
+const currencyFormatter = new Intl.NumberFormat('id-ID', {
+  style: 'currency',
+  currency: 'IDR',
+  maximumFractionDigits: 0,
+});
+
 export interface CatalogStatusLabel {
   text: string;
+  /** Baris kedua di dalam stempel (mis. harga pemenang) — cuma dipakai variant 'stamp'. */
+  subtext?: string;
   /** Kelas warna Tailwind (bg+text) untuk badge — dipakai sama di semua template. */
   className: string;
   /**
-   * 'stamp' = "Terjual" -- sengaja dibuat MENCOLOK (stempel lingkaran merah
-   * menutupi tengah gambar), berfungsi juga sebagai media promosi ("banyak
-   * barang berhasil terjual di platform ini"), bukan cuma info netral.
+   * 'stamp' = "Terjual"/"Dimenangkan" -- sengaja dibuat MENCOLOK (stempel
+   * lingkaran merah menutupi tengah gambar), berfungsi juga sebagai media
+   * promosi (AUCTION: tunjukkan harga pemenang jadi bukti lelang di platform
+   * ini kompetitif; umum: "banyak barang berhasil terjual di sini"), bukan
+   * cuma info netral.
    * 'pill' = badge kecil biasa di pojok gambar (status lain yang lebih netral).
    */
   variant: 'stamp' | 'pill';
@@ -26,10 +36,21 @@ export interface CatalogStatusLabel {
  * tetap muncul di katalog").
  */
 export function getCatalogStatusLabel(
-  product: Pick<ProductPublic, 'mode_jual' | 'status' | 'auction_start_at' | 'auction_end_at'>,
+  product: Pick<
+    ProductPublic,
+    'mode_jual' | 'status' | 'auction_start_at' | 'auction_end_at' | 'current_highest_bid'
+  >,
   market: Pick<Market, 'registration_deadline_minutes'>,
 ): CatalogStatusLabel | null {
   if (product.status === 'sold') {
+    if (product.mode_jual === 'AUCTION' && product.current_highest_bid != null) {
+      return {
+        text: 'Dimenangkan',
+        subtext: currencyFormatter.format(product.current_highest_bid),
+        className: '',
+        variant: 'stamp',
+      };
+    }
     return { text: 'Terjual', className: '', variant: 'stamp' };
   }
 
