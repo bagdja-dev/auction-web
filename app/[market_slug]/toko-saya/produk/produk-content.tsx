@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 
 import { ApiError, apiClient } from '@/lib/proxy-client';
@@ -30,7 +31,7 @@ const STATUS_BADGE_CLASS: Record<Product['status'], string> = {
 
 /** List produk sendiri BERBASIS GRID (bukan tabel/list) + tambah/edit lewat Modal. */
 export default function ProdukContent() {
-  const { marketId } = useTokoSaya();
+  const { marketId, marketSlug } = useTokoSaya();
 
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
@@ -231,14 +232,24 @@ export default function ProdukContent() {
                       </>
                     )}
                     {product.status === 'published' && (
-                      <button
-                        type="button"
-                        onClick={() => handleUnpublish(product.id)}
-                        disabled={busyId === product.id}
-                        className="rounded-md border border-amber-300 px-2.5 py-1 text-xs font-medium text-amber-700 transition hover:bg-amber-50 disabled:opacity-50"
-                      >
-                        {busyId === product.id ? '…' : 'Turunkan'}
-                      </button>
+                      <>
+                        <Link
+                          href={`/${marketSlug}/products/${product.slug}?view=owner`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="rounded-md border border-zinc-300 px-2.5 py-1 text-xs font-medium text-zinc-700 transition hover:bg-zinc-50"
+                        >
+                          Lihat Detail
+                        </Link>
+                        <button
+                          type="button"
+                          onClick={() => handleUnpublish(product.id)}
+                          disabled={busyId === product.id}
+                          className="rounded-md border border-amber-300 px-2.5 py-1 text-xs font-medium text-amber-700 transition hover:bg-amber-50 disabled:opacity-50"
+                        >
+                          {busyId === product.id ? '…' : 'Turunkan'}
+                        </button>
+                      </>
                     )}
                     <button
                       type="button"

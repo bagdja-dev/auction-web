@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { useEffect, useRef, useState, type MouseEvent, type TouchEvent } from 'react';
 
 import { ModelViewerElement } from '@/components/upload/model-viewer-element';
@@ -79,6 +80,8 @@ interface Slide {
  * `CatalogView`, lihat catatan di sana soal resolusi template per Market.
  */
 export default function ProductDetailView({ marketSlug, marketId, product }: ProductDetailViewProps) {
+  const searchParams = useSearchParams();
+  const isOwnerView = searchParams.get('view') === 'owner';
   const isAuction = product.mode_jual === 'AUCTION';
   const imageUrls = product.images && product.images.length > 0 ? product.images : [];
   const slides: Slide[] = [
@@ -344,7 +347,12 @@ export default function ProductDetailView({ marketSlug, marketId, product }: Pro
                 auctionStartAt={product.auction_start_at}
                 auctionEndAt={product.auction_end_at}
                 productStatus={product.status}
+                readOnly={isOwnerView}
               />
+            ) : isOwnerView ? (
+              <span className="block w-full rounded-lg bg-zinc-100 px-4 py-3 text-center text-sm font-medium text-zinc-500 md:mt-2">
+                Mode lihat saja — Anda pemilik produk ini
+              </span>
             ) : product.status === 'published' ? (
               <Link
                 href={`/${marketSlug}/products/${product.slug}/checkout`}

@@ -28,6 +28,8 @@ export interface AuctionPanelProps {
   auctionStartAt: string | null;
   auctionEndAt: string | null;
   productStatus: ProductStatus;
+  /** Mode lihat-saja untuk pemilik produk (dibuka dari "Toko Saya" lewat `?view=owner`) — lihat sesi lelang tanpa bisa daftar/menawar. */
+  readOnly?: boolean;
 }
 
 const POLL_INTERVAL_MS = 3000;
@@ -93,6 +95,7 @@ export function AuctionPanel({
   auctionStartAt,
   auctionEndAt,
   productStatus,
+  readOnly = false,
 }: AuctionPanelProps) {
   const { isLoggedIn, loading: authLoading } = useAuth();
   const loginHref = `/auth/login?next=${encodeURIComponent(`/${marketSlug}/products/${productSlug}`)}`;
@@ -102,9 +105,10 @@ export function AuctionPanel({
   const [registrationError, setRegistrationError] = useState<string | null>(null);
 
   // Cek status registrasi SEKALI begitu diketahui user login — tidak nge-fetch
-  // sama sekali kalau belum login (cek `useAuth()` dari cookie, tanpa API call).
+  // sama sekali kalau belum login (cek `useAuth()` dari cookie, tanpa API call)
+  // ATAU kalau `readOnly` (pemilik produk, tidak relevan cek registrasi buyer).
   useEffect(() => {
-    if (authLoading || !isLoggedIn) return;
+    if (readOnly || authLoading || !isLoggedIn) return;
     let cancelled = false;
     (async () => {
       try {
@@ -123,7 +127,27 @@ export function AuctionPanel({
     return () => {
       cancelled = true;
     };
-  }, [authLoading, isLoggedIn, marketId, productId]);
+  }, [readOnly, authLoading, isLoggedIn, marketId, productId]);
+
+  if (readOnly) {
+    return (
+      <PanelShell>
+        <BiddingSection
+          marketId={marketId}
+          marketSlug={marketSlug}
+          productId={productId}
+          productSlug={productSlug}
+          startingPrice={startingPrice}
+          minIncrement={minIncrement}
+          initialHighestBid={initialHighestBid}
+          auctionStartAt={auctionStartAt}
+          auctionEndAt={auctionEndAt}
+          initialProductStatus={productStatus}
+          readOnly
+        />
+      </PanelShell>
+    );
+  }
 
   if (authLoading) {
     return (
@@ -453,6 +477,7 @@ function BiddingSection({
   auctionStartAt,
   auctionEndAt,
   initialProductStatus,
+  readOnly = false,
 }: {
   marketId: string;
   marketSlug: string;
@@ -464,6 +489,7 @@ function BiddingSection({
   auctionStartAt: string | null;
   auctionEndAt: string | null;
   initialProductStatus: ProductStatus;
+  readOnly?: boolean;
 }) {
   const [highestBid, setHighestBid] = useState<number | null>(initialHighestBid);
   const [productStatus, setProductStatus] = useState<ProductStatus>(initialProductStatus);
@@ -560,9 +586,15 @@ function BiddingSection({
 
   return (
     <div className="space-y-4">
-      <div className="rounded-lg border border-green-200 bg-green-50 p-3">
-        <p className="text-sm font-medium text-green-800">Deposit terverifikasi — Anda bisa ikut menawar.</p>
-      </div>
+      {readOnly ? (
+        <div className="rounded-lg border border-zinc-200 bg-zinc-100 p-3">
+          <p className="text-sm font-medium text-zinc-700">Mode lihat saja — Anda pemilik produk ini.</p>
+        </div>
+      ) : (
+        <div className="rounded-lg border border-green-200 bg-green-50 p-3">
+          <p className="text-sm font-medium text-green-800">Deposit terverifikasi — Anda bisa ikut menawar.</p>
+        </div>
+      )}
 
       <div className="flex items-start justify-between gap-2">
         <HighestBidSummary highestBid={highestBid} startingPrice={startingPrice} />
@@ -587,7 +619,7 @@ function BiddingSection({
               ? 'Lelang telah berakhir tanpa penawar.'
               : 'Lelang telah berakhir.'}
         </p>
-      ) : (
+      ) : readOnly ? null : (
         <form onSubmit={handleSubmitBid} className="space-y-2">
           <label className="block text-sm font-medium text-zinc-700">
             Nominal Tawaran (minimum {currencyFormatter.format(minNextBid)})
