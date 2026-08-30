@@ -2,6 +2,7 @@ import Link from 'next/link';
 
 import type { Market, ProductPublic } from '@/lib/api-client';
 import { getCatalogStatusLabel } from '@/lib/product-status';
+import { SoldStamp } from '@/components/sold-stamp';
 
 const currencyFormatter = new Intl.NumberFormat('id-ID', {
   style: 'currency',
@@ -58,13 +59,16 @@ export default function ProductCardGrand({
         >
           {isAuction ? 'Lelang' : 'Beli Langsung'}
         </span>
-        {statusLabel && (
-          <span
-            className={`absolute right-3 top-3 rounded-full px-2.5 py-1 text-[11px] font-semibold shadow ${statusLabel.className}`}
-          >
-            {statusLabel.text}
-          </span>
-        )}
+        {statusLabel &&
+          (statusLabel.variant === 'stamp' ? (
+            <SoldStamp text={statusLabel.text} />
+          ) : (
+            <span
+              className={`absolute right-3 top-3 rounded-full px-2.5 py-1 text-[11px] font-semibold shadow ${statusLabel.className}`}
+            >
+              {statusLabel.text}
+            </span>
+          ))}
       </div>
 
       <div className="px-0.5 pt-2.5">
