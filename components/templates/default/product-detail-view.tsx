@@ -251,6 +251,8 @@ export default function ProductDetailView({ marketSlug, marketId, product }: Pro
                     src={current.url}
                     className="aspect-square w-full object-cover"
                     controls
+                    controlsList="nofullscreen noremoteplayback"
+                    disablePictureInPicture
                     autoPlay
                     loop
                     playsInline
@@ -439,6 +441,8 @@ export default function ProductDetailView({ marketSlug, marketId, product }: Pro
                 src={current.url}
                 className="max-h-[85vh] max-w-full rounded-lg object-contain"
                 controls
+                controlsList="nofullscreen noremoteplayback"
+                disablePictureInPicture
                 autoPlay
                 loop
                 playsInline
