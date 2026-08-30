@@ -11,6 +11,27 @@ interface GalleryEditorProps {
   disabled?: boolean;
 }
 
+function ArrowIcon({ direction = 'left' }: { direction?: 'left' | 'right' | 'up' | 'down' }) {
+  const rotate =
+    direction === 'left' ? 180 : direction === 'right' ? 0 : direction === 'up' ? 90 : 270;
+
+  return (
+    <svg
+      className="h-4 w-4"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      style={{ transform: `rotate(${rotate}deg)` }}
+    >
+      <path d="M5 12h14" />
+      <path d="m12 5 7 7-7 7" />
+    </svg>
+  );
+}
+
 /**
  * Editor galeri gambar produk — versi sederhana (array URL string polos),
  * SESUAI kontrak `images: string[]` backend Auction Market. Ini BUKAN
@@ -27,6 +48,9 @@ export function GalleryEditor({
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
+  const [selectedIndex, setSelectedIndex] = useState(0);
+
+  const currentImage = value[selectedIndex] ?? value[0] ?? null;
 
   const handleFiles = async (files: FileList | null) => {
     if (!files?.length || disabled) return;
@@ -39,7 +63,9 @@ export function GalleryEditor({
         const result = await uploadAsset(file, uploadFolder);
         added.push(result.url);
       }
-      onChange([...value, ...added]);
+      const next = [...value, ...added];
+      onChange(next);
+      setSelectedIndex(Math.max(0, next.length - added.length));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Gagal mengunggah gambar');
     } finally {
@@ -49,7 +75,9 @@ export function GalleryEditor({
   };
 
   const removeImage = (index: number) => {
-    onChange(value.filter((_, i) => i !== index));
+    const next = value.filter((_, i) => i !== index);
+    onChange(next);
+    setSelectedIndex((prev) => Math.min(prev, Math.max(0, next.length - 1)));
   };
 
   const moveImage = (index: number, direction: 'up' | 'down') => {
@@ -58,10 +86,11 @@ export function GalleryEditor({
     const next = [...value];
     [next[index], next[swap]] = [next[swap], next[index]];
     onChange(next);
+    setSelectedIndex(swap);
   };
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-3">
       <input
         ref={inputRef}
         type="file"
@@ -87,57 +116,107 @@ export function GalleryEditor({
       <p className="text-xs text-zinc-400">JPEG/PNG/WebP/GIF — maks. 5 MB per gambar.</p>
       {error && <p className="text-xs text-[var(--brand-error)]">{error}</p>}
 
-      {value.length > 0 && (
-        <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-          {value.map((url, index) => (
-            <div
-              key={`${url}-${index}`}
-              className="group relative aspect-square overflow-hidden rounded-lg border border-zinc-200 bg-zinc-100"
-            >
+      {value.length > 0 && currentImage ? (
+        <div className="space-y-3">
+          <div className="relative overflow-hidden rounded-xl border border-zinc-200 bg-zinc-100">
+            <div className="relative aspect-[4/3] w-full overflow-hidden">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={url} alt={`Gambar ${index + 1}`} className="h-full w-full object-cover" />
-
-              {index === 0 && (
-                <span className="absolute left-1 top-1 rounded-md bg-black/60 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
+              <img src={currentImage} alt={`Preview gambar ${selectedIndex + 1}`} className="h-full w-full object-cover" />
+              {selectedIndex === 0 && (
+                <span className="absolute left-2 top-2 rounded-full bg-black/60 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-white">
                   Cover
                 </span>
               )}
+              {value.length > 1 && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedIndex((prev) => (prev === 0 ? value.length - 1 : prev - 1))}
+                    aria-label="Gambar sebelumnya"
+                    className="absolute left-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-black/40 text-white transition hover:bg-black/55"
+                  >
+                    <ArrowIcon direction="left" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedIndex((prev) => (prev + 1) % value.length)}
+                    aria-label="Gambar berikutnya"
+                    className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-black/40 text-white transition hover:bg-black/55"
+                  >
+                    <ArrowIcon direction="right" />
+                  </button>
+                </>
+              )}
+            </div>
 
-              <div className="absolute inset-0 flex items-start justify-end gap-1 bg-black/0 p-1 opacity-0 transition group-hover:bg-black/10 group-hover:opacity-100">
-                {index > 0 && (
+            <div className="flex items-center justify-between gap-2 border-t border-zinc-200 bg-white p-2">
+              <span className="text-xs font-medium text-zinc-500">
+                {selectedIndex + 1} / {value.length}
+              </span>
+              <div className="flex items-center gap-1">
+                {selectedIndex > 0 && (
                   <button
                     type="button"
                     disabled={disabled}
-                    onClick={() => moveImage(index, 'up')}
-                    aria-label="Naik"
-                    className="rounded bg-white/90 p-1 text-xs text-zinc-700 shadow hover:bg-white"
+                    onClick={() => moveImage(selectedIndex, 'up')}
+                    aria-label="Pindahkan ke atas"
+                    className="flex h-7 w-7 items-center justify-center rounded-md border border-zinc-200 bg-zinc-50 text-zinc-600 transition hover:border-zinc-300 hover:bg-zinc-100"
                   >
-                    ↑
+                    <ArrowIcon direction="up" />
                   </button>
                 )}
-                {index < value.length - 1 && (
+                {selectedIndex < value.length - 1 && (
                   <button
                     type="button"
                     disabled={disabled}
-                    onClick={() => moveImage(index, 'down')}
-                    aria-label="Turun"
-                    className="rounded bg-white/90 p-1 text-xs text-zinc-700 shadow hover:bg-white"
+                    onClick={() => moveImage(selectedIndex, 'down')}
+                    aria-label="Pindahkan ke bawah"
+                    className="flex h-7 w-7 items-center justify-center rounded-md border border-zinc-200 bg-zinc-50 text-zinc-600 transition hover:border-zinc-300 hover:bg-zinc-100"
                   >
-                    ↓
+                    <ArrowIcon direction="down" />
                   </button>
                 )}
                 <button
                   type="button"
                   disabled={disabled}
-                  onClick={() => removeImage(index)}
-                  aria-label="Hapus gambar"
-                  className="rounded bg-white/90 p-1 text-xs text-[var(--brand-error)] shadow hover:bg-white"
+                  onClick={() => removeImage(selectedIndex)}
+                  aria-label="Hapus gambar yang dipilih"
+                  className="flex h-7 w-7 items-center justify-center rounded-md border border-red-200 bg-red-50 text-red-600 transition hover:border-red-300 hover:bg-red-100"
                 >
                   ✕
                 </button>
               </div>
             </div>
-          ))}
+          </div>
+
+          <div className="grid grid-cols-4 gap-2 sm:grid-cols-5">
+            {value.map((url, index) => (
+              <button
+                key={`${url}-${index}`}
+                type="button"
+                onClick={() => setSelectedIndex(index)}
+                className="group relative overflow-hidden rounded-lg border transition"
+                style={{
+                  borderColor: index === selectedIndex ? 'var(--brand-primary)' : '#e4e4e7',
+                  boxShadow: index === selectedIndex ? '0 0 0 2px rgba(15,118,110,0.12)' : 'none',
+                }}
+              >
+                <div className="relative aspect-square">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={url} alt={`Thumbnails ${index + 1}`} className="h-full w-full object-cover" />
+                  {index === 0 && (
+                    <span className="absolute left-1 top-1 rounded-full bg-black/60 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-white">
+                      Cover
+                    </span>
+                  )}
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div className="flex min-h-40 items-center justify-center rounded-xl border border-dashed border-zinc-200 bg-zinc-50 text-sm text-zinc-400">
+          Belum ada gambar produk.
         </div>
       )}
     </div>
