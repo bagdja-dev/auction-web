@@ -49,9 +49,14 @@ function formatDateTime(iso: string | null): string {
   })}`;
 }
 
-function isClosedForRegistration(productStatus: ProductStatus, auctionEndAt: string | null): boolean {
+function isClosedForRegistration(
+  productStatus: ProductStatus,
+  auctionStartAt: string | null,
+  auctionEndAt: string | null,
+): boolean {
   if (productStatus !== 'published') return true;
   if (auctionEndAt && Date.now() >= new Date(auctionEndAt).getTime()) return true;
+  if (auctionStartAt && Date.now() >= new Date(auctionStartAt).getTime()) return true;
   return false;
 }
 
@@ -194,6 +199,7 @@ export function AuctionPanel({
           marketId={marketId}
           productId={productId}
           productStatus={productStatus}
+          auctionStartAt={auctionStartAt}
           auctionEndAt={auctionEndAt}
           highestBid={initialHighestBid}
           startingPrice={startingPrice}
@@ -233,6 +239,7 @@ function RegistrationForm({
   marketId,
   productId,
   productStatus,
+  auctionStartAt,
   auctionEndAt,
   highestBid,
   startingPrice,
@@ -240,11 +247,14 @@ function RegistrationForm({
   marketId: string;
   productId: string;
   productStatus: ProductStatus;
+  auctionStartAt: string | null;
   auctionEndAt: string | null;
   highestBid: number | null;
   startingPrice: number;
 }) {
-  const closed = isClosedForRegistration(productStatus, auctionEndAt);
+  const closed = isClosedForRegistration(productStatus, auctionStartAt, auctionEndAt);
+  const alreadyStarted =
+    productStatus === 'published' && !!auctionStartAt && Date.now() >= new Date(auctionStartAt).getTime();
 
   const [deposit, setDeposit] = useState<DepositPreview | null>(null);
   const [depositLoading, setDepositLoading] = useState(true);
@@ -287,7 +297,11 @@ function RegistrationForm({
       <div>
         <HighestBidSummary highestBid={highestBid} startingPrice={startingPrice} />
         <p className="mt-3 text-sm font-medium text-zinc-600">
-          {productStatus !== 'published' ? 'Lelang sudah berakhir.' : 'Pendaftaran lelang sudah ditutup.'}
+          {productStatus !== 'published'
+            ? 'Lelang sudah berakhir.'
+            : alreadyStarted
+              ? 'Pendaftaran sudah ditutup — lelang sudah dimulai.'
+              : 'Pendaftaran lelang sudah ditutup.'}
         </p>
       </div>
     );

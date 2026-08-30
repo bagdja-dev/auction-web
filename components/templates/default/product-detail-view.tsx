@@ -178,8 +178,16 @@ export default function ProductDetailView({ marketSlug, marketId, product }: Pro
         ← Kembali ke katalog
       </Link>
 
-      <div className="grid gap-8 md:grid-cols-2">
-        <div className="order-1 space-y-3 md:order-none md:col-start-1 md:row-start-1">
+      <div className="grid items-start gap-8 md:grid-cols-2">
+        {/* Kolom media (kiri di desktop): carousel + deskripsi mengalir sebagai
+            satu kolom independen (md:flex md:flex-col) supaya tingginya TIDAK
+            terikat ke tinggi kolom kanan (yang biasanya jauh lebih tinggi
+            karena berisi form) — itu penyebab celah kosong yang dilaporkan
+            sebelumnya kalau dipaksa jadi grid row/kolom bersama. Di mobile,
+            "contents" membuat div ini transparan, carousel & deskripsi jadi
+            grid-item lepas yang diatur lewat `order` masing-masing. */}
+        <div className="contents md:flex md:flex-col md:gap-3">
+        <div className="order-1 space-y-3">
           {slides.length > 0 ? (
             <div className={`grid gap-3 ${count > 1 ? 'sm:grid-cols-[80px_1fr]' : ''}`}>
               {count > 1 && (
@@ -323,13 +331,19 @@ export default function ProductDetailView({ marketSlug, marketId, product }: Pro
           )}
         </div>
 
-        <div className="order-3 space-y-3 md:order-none md:col-start-1 md:row-start-2">
+        <div className="order-3 space-y-3">
           {product.description && (
             <p className="whitespace-pre-line text-sm leading-relaxed text-zinc-700">{product.description}</p>
           )}
         </div>
+        </div>
 
-        <div className="order-2 flex flex-col gap-4 md:order-none md:col-start-2 md:row-start-1 md:row-span-2">
+        {/* Kolom info+aksi (kanan di desktop): sama alasannya, mengalir
+            independen dari kolom media supaya tinggi masing-masing kolom
+            tidak saling memaksa — panel aksi tetap `md:sticky` mengikuti
+            scroll dalam kolom ini. */}
+        <div className="contents md:flex md:flex-col md:gap-4">
+        <div className="order-2 flex flex-col gap-4">
           <span
             className={`inline-block w-fit rounded-full px-3 py-1 text-xs font-medium text-white ${
               isAuction ? 'bg-[var(--palette-orange-burn)]' : 'bg-[var(--brand-success)]'
@@ -358,10 +372,11 @@ export default function ProductDetailView({ marketSlug, marketId, product }: Pro
               )}
             </div>
           )}
+        </div>
 
           <div
             ref={actionPanelRef}
-            className={`fixed inset-x-0 bottom-0 z-40 max-h-[75vh] overflow-y-auto rounded-t-2xl border-t border-zinc-200 bg-white p-4 shadow-[0_-8px_24px_rgba(0,0,0,0.12)] ${
+            className={`order-4 fixed inset-x-0 bottom-0 z-40 max-h-[75vh] overflow-y-auto rounded-t-2xl border-t border-zinc-200 bg-white p-4 shadow-[0_-8px_24px_rgba(0,0,0,0.12)] ${
               isAuction ? '' : 'flex items-center gap-3'
             } md:sticky md:top-6 md:z-auto md:max-h-none md:overflow-visible md:rounded-none md:border-0 md:bg-transparent md:p-0 md:shadow-none`}
           >
