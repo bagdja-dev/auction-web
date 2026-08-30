@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 
 import { Modal } from '@/components/modal';
+import { NumberInput } from '@/components/number-input';
 import { ShippingAreaAutocomplete, type ShippingAreaSelection } from '@/components/shipping-area-autocomplete';
 import { GalleryEditor } from '@/components/upload/gallery-editor';
 import { Model3DUpload } from '@/components/upload/model3d-upload';
@@ -239,13 +240,10 @@ export function ProductFormModal({ open, onClose, product, onSaved }: ProductFor
           <label className="mb-1 block text-sm font-medium text-zinc-700">
             Harga {form.modeJual === 'AUCTION' && '(estimasi/harga awal)'}
           </label>
-          <input
-            type="number"
+          <NumberInput
             required
-            min={0}
             value={form.price}
-            onChange={(e) => updateField('price', e.target.value)}
-            className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-[var(--brand-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--brand-primary)]"
+            onChange={(raw) => updateField('price', raw)}
           />
         </div>
 
@@ -253,12 +251,9 @@ export function ProductFormModal({ open, onClose, product, onSaved }: ProductFor
           <>
             <div>
               <label className="mb-1 block text-sm font-medium text-zinc-700">Kelipatan Tawar Minimum</label>
-              <input
-                type="number"
-                min={0}
+              <NumberInput
                 value={form.minIncrement}
-                onChange={(e) => updateField('minIncrement', e.target.value)}
-                className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-[var(--brand-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--brand-primary)]"
+                onChange={(raw) => updateField('minIncrement', raw)}
               />
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -304,43 +299,19 @@ export function ProductFormModal({ open, onClose, product, onSaved }: ProductFor
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <div>
               <label className="mb-1 block text-xs text-zinc-500">Berat (gram)</label>
-              <input
-                type="number"
-                min={0}
-                value={form.weightGrams}
-                onChange={(e) => updateField('weightGrams', e.target.value)}
-                className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-[var(--brand-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--brand-primary)]"
-              />
+              <NumberInput value={form.weightGrams} onChange={(raw) => updateField('weightGrams', raw)} />
             </div>
             <div>
               <label className="mb-1 block text-xs text-zinc-500">Panjang (cm)</label>
-              <input
-                type="number"
-                min={0}
-                value={form.lengthCm}
-                onChange={(e) => updateField('lengthCm', e.target.value)}
-                className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-[var(--brand-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--brand-primary)]"
-              />
+              <NumberInput value={form.lengthCm} onChange={(raw) => updateField('lengthCm', raw)} />
             </div>
             <div>
               <label className="mb-1 block text-xs text-zinc-500">Lebar (cm)</label>
-              <input
-                type="number"
-                min={0}
-                value={form.widthCm}
-                onChange={(e) => updateField('widthCm', e.target.value)}
-                className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-[var(--brand-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--brand-primary)]"
-              />
+              <NumberInput value={form.widthCm} onChange={(raw) => updateField('widthCm', raw)} />
             </div>
             <div>
               <label className="mb-1 block text-xs text-zinc-500">Tinggi (cm)</label>
-              <input
-                type="number"
-                min={0}
-                value={form.heightCm}
-                onChange={(e) => updateField('heightCm', e.target.value)}
-                className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-[var(--brand-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--brand-primary)]"
-              />
+              <NumberInput value={form.heightCm} onChange={(raw) => updateField('heightCm', raw)} />
             </div>
           </div>
           <p className="mt-1 text-xs text-zinc-400">
