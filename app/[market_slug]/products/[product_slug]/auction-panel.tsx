@@ -562,6 +562,21 @@ function BiddingSection({
 
   const minNextBid = highestBid != null ? highestBid + (minIncrement ?? 1) : startingPrice;
 
+  // Tawaran tertinggi bisa naik lewat polling (bukan aksi user ini, mis. bidder
+  // lain lebih cepat) — kalau nominal yang lagi diketik jadi lebih kecil dari
+  // minimum baru, langsung sesuaikan ke minimum baru itu supaya user tidak
+  // submit tawaran yang pasti ditolak backend.
+  useEffect(() => {
+    setBidAmount((current) => {
+      if (current === '') return current;
+      const currentAmount = Number(current);
+      if (!Number.isNaN(currentAmount) && currentAmount < minNextBid) {
+        return String(minNextBid);
+      }
+      return current;
+    });
+  }, [minNextBid]);
+
   async function handleSubmitBid(e: FormEvent) {
     e.preventDefault();
     const amount = Number(bidAmount);
