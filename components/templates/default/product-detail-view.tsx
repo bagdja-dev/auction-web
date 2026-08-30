@@ -95,6 +95,8 @@ export default function ProductDetailView({ marketSlug, marketId, product }: Pro
   const [zoomPos, setZoomPos] = useState({ x: 50, y: 50 });
   const [isLightboxOpen, setIsLightboxOpen] = useState(false);
   const touchStartX = useRef<number | null>(null);
+  const actionPanelRef = useRef<HTMLDivElement>(null);
+  const [mobileActionPanelSpace, setMobileActionPanelSpace] = useState<number | null>(null);
 
   const count = slides.length;
   const current = slides[index] ?? null;
@@ -142,8 +144,33 @@ export default function ProductDetailView({ marketSlug, marketId, product }: Pro
     };
   }, [isLightboxOpen, index]);
 
+  // Panel aksi (AuctionPanel/tombol beli) "fixed" di bawah layar HANYA pada
+  // mobile (md:sticky di desktop, lihat class-nya di bawah) — tingginya
+  // dinamis (form registrasi vs form bid vs tombol saja), jadi padding-bottom
+  // <main> harus ikut dinamis juga, bukan angka tetap, supaya konten di
+  // atasnya (harga, jadwal lelang, dst.) tidak ketutup panel.
+  useEffect(() => {
+    const el = actionPanelRef.current;
+    if (!el) return;
+
+    const isMobile = () => window.matchMedia('(max-width: 767px)').matches;
+    const update = () => setMobileActionPanelSpace(isMobile() ? el.getBoundingClientRect().height : null);
+
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    window.addEventListener('resize', update);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', update);
+    };
+  }, []);
+
   return (
-    <main className="mx-auto max-w-5xl px-4 py-8 pb-28 sm:px-6 md:pb-8">
+    <main
+      className="mx-auto max-w-5xl px-4 py-8 sm:px-6 md:pb-8"
+      style={mobileActionPanelSpace != null ? { paddingBottom: mobileActionPanelSpace + 16 } : undefined}
+    >
       <Link
         href={`/${marketSlug}`}
         className="mb-6 inline-block text-sm text-zinc-500 hover:text-[var(--brand-primary)]"
@@ -331,6 +358,7 @@ export default function ProductDetailView({ marketSlug, marketId, product }: Pro
           )}
 
           <div
+            ref={actionPanelRef}
             className={`fixed inset-x-0 bottom-0 z-40 max-h-[75vh] overflow-y-auto rounded-t-2xl border-t border-zinc-200 bg-white p-4 shadow-[0_-8px_24px_rgba(0,0,0,0.12)] ${
               isAuction ? '' : 'flex items-center gap-3'
             } md:sticky md:top-6 md:z-auto md:max-h-none md:overflow-visible md:rounded-none md:border-0 md:bg-transparent md:p-0 md:shadow-none`}
