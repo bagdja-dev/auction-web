@@ -140,7 +140,7 @@ export default function ProductDetailView({ marketSlug, marketId, product }: Pro
   }, [isLightboxOpen, index]);
 
   return (
-    <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
+    <main className="mx-auto max-w-5xl px-4 py-8 pb-28 sm:px-6 md:pb-8">
       <Link
         href={`/${marketSlug}`}
         className="mb-6 inline-block text-sm text-zinc-500 hover:text-[var(--brand-primary)]"
@@ -291,6 +291,10 @@ export default function ProductDetailView({ marketSlug, marketId, product }: Pro
               Tidak ada gambar
             </div>
           )}
+
+          {product.description && (
+            <p className="whitespace-pre-line text-sm leading-relaxed text-zinc-700">{product.description}</p>
+          )}
         </div>
 
         <div className="flex flex-col gap-4">
@@ -323,35 +327,37 @@ export default function ProductDetailView({ marketSlug, marketId, product }: Pro
             </div>
           )}
 
-          {product.description && (
-            <p className="whitespace-pre-line text-sm leading-relaxed text-zinc-700">{product.description}</p>
-          )}
-
-          {isAuction ? (
-            <AuctionPanel
-              marketId={marketId}
-              marketSlug={marketSlug}
-              productId={product.id}
-              productSlug={product.slug}
-              startingPrice={product.price}
-              minIncrement={product.min_increment}
-              initialHighestBid={product.current_highest_bid}
-              auctionStartAt={product.auction_start_at}
-              auctionEndAt={product.auction_end_at}
-              productStatus={product.status}
-            />
-          ) : product.status === 'published' ? (
-            <Link
-              href={`/${marketSlug}/products/${product.slug}/checkout`}
-              className="mt-2 block w-full rounded-lg bg-[var(--brand-primary)] px-4 py-3 text-center text-sm font-medium text-white transition hover:bg-[var(--brand-primary-hover)]"
-            >
-              Beli Sekarang
-            </Link>
-          ) : (
-            <span className="mt-2 block w-full rounded-lg bg-zinc-200 px-4 py-3 text-center text-sm font-medium text-zinc-500">
-              Sudah Terjual
-            </span>
-          )}
+          <div
+            className={`fixed inset-x-0 bottom-0 z-40 max-h-[75vh] overflow-y-auto rounded-t-2xl border-t border-zinc-200 bg-white p-4 shadow-[0_-8px_24px_rgba(0,0,0,0.12)] ${
+              isAuction ? '' : 'flex items-center gap-3'
+            } md:sticky md:top-6 md:z-auto md:max-h-none md:overflow-visible md:rounded-none md:border-0 md:bg-transparent md:p-0 md:shadow-none`}
+          >
+            {isAuction ? (
+              <AuctionPanel
+                marketId={marketId}
+                marketSlug={marketSlug}
+                productId={product.id}
+                productSlug={product.slug}
+                startingPrice={product.price}
+                minIncrement={product.min_increment}
+                initialHighestBid={product.current_highest_bid}
+                auctionStartAt={product.auction_start_at}
+                auctionEndAt={product.auction_end_at}
+                productStatus={product.status}
+              />
+            ) : product.status === 'published' ? (
+              <Link
+                href={`/${marketSlug}/products/${product.slug}/checkout`}
+                className="block w-full rounded-lg bg-[var(--brand-primary)] px-4 py-3 text-center text-sm font-medium text-white transition hover:bg-[var(--brand-primary-hover)] md:mt-2"
+              >
+                Beli Sekarang
+              </Link>
+            ) : (
+              <span className="block w-full rounded-lg bg-zinc-200 px-4 py-3 text-center text-sm font-medium text-zinc-500 md:mt-2">
+                Sudah Terjual
+              </span>
+            )}
+          </div>
         </div>
       </div>
 
