@@ -179,7 +179,7 @@ export default function ProductDetailView({ marketSlug, marketId, product }: Pro
       </Link>
 
       <div className="grid gap-8 md:grid-cols-2">
-        <div className="space-y-3">
+        <div className="order-1 space-y-3 md:order-none md:col-start-1 md:row-start-1">
           {slides.length > 0 ? (
             <div className={`grid gap-3 ${count > 1 ? 'sm:grid-cols-[80px_1fr]' : ''}`}>
               {count > 1 && (
@@ -321,13 +321,15 @@ export default function ProductDetailView({ marketSlug, marketId, product }: Pro
               Tidak ada gambar
             </div>
           )}
+        </div>
 
+        <div className="order-3 space-y-3 md:order-none md:col-start-1 md:row-start-2">
           {product.description && (
             <p className="whitespace-pre-line text-sm leading-relaxed text-zinc-700">{product.description}</p>
           )}
         </div>
 
-        <div className="flex flex-col gap-4">
+        <div className="order-2 flex flex-col gap-4 md:order-none md:col-start-2 md:row-start-1 md:row-span-2">
           <span
             className={`inline-block w-fit rounded-full px-3 py-1 text-xs font-medium text-white ${
               isAuction ? 'bg-[var(--palette-orange-burn)]' : 'bg-[var(--brand-success)]'
