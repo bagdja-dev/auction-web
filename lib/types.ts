@@ -185,6 +185,7 @@ export interface AuctionBid {
   id: string;
   product_id: string;
   bidder_user_id: string;
+  bidder_username: string | null;
   amount: number;
   created_at: string;
 }

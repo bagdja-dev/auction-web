@@ -671,7 +671,9 @@ function BiddingSection({
                 <ul className="space-y-1 text-sm text-zinc-600">
                   {history.map((bid) => (
                     <li key={bid.id} className="flex items-center justify-between border-b border-zinc-100 py-1.5 last:border-0">
-                      <span className="text-zinc-500">Peserta — {formatDateTime(bid.created_at)}</span>
+                      <span className="text-zinc-500">
+                        {bid.bidder_username ?? 'Peserta'} — {formatDateTime(bid.created_at)}
+                      </span>
                       <span className="font-medium text-zinc-900">{currencyFormatter.format(bid.amount)}</span>
                     </li>
                   ))}
