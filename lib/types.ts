@@ -149,9 +149,8 @@ export interface AuctionRegistration {
   recipient_name: string;
   phone: string;
   address: string;
-  destination_area_id: string | null;
-  destination_area_name: string | null;
-  courier_code: string | null;
+  destination_area_id: string;
+  destination_area_name: string;
   deposit_amount: number;
   currency: string;
   escrow_id: string | null;
@@ -166,9 +165,8 @@ export interface RegisterAuctionPayload {
   recipient_name: string;
   phone: string;
   address: string;
-  destination_area_id?: string;
-  destination_area_name?: string;
-  courier_code?: string;
+  destination_area_id: string;
+  destination_area_name: string;
 }
 
 export interface AuctionRegistrationMeResponse {

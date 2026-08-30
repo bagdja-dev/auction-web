@@ -230,7 +230,6 @@ function RegistrationForm({
   const [phone, setPhone] = useState('');
   const [address, setAddress] = useState('');
   const [destinationArea, setDestinationArea] = useState<ShippingAreaSelection | null>(null);
-  const [courierCode, setCourierCode] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -270,10 +269,19 @@ function RegistrationForm({
     );
   }
 
-  const canSubmit = recipientName.trim() !== '' && phone.trim() !== '' && address.trim() !== '' && !submitting;
+  const canSubmit =
+    recipientName.trim() !== '' &&
+    phone.trim() !== '' &&
+    address.trim() !== '' &&
+    destinationArea !== null &&
+    !submitting;
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
+    if (!destinationArea) {
+      setError('Pilih alamat tujuan terlebih dahulu.');
+      return;
+    }
     setSubmitting(true);
     setError(null);
     try {
@@ -281,10 +289,8 @@ function RegistrationForm({
         recipient_name: recipientName,
         phone,
         address,
-        ...(destinationArea
-          ? { destination_area_id: destinationArea.providerAreaId, destination_area_name: destinationArea.name }
-          : {}),
-        ...(courierCode.trim() ? { courier_code: courierCode.trim() } : {}),
+        destination_area_id: destinationArea.providerAreaId,
+        destination_area_name: destinationArea.name,
       };
 
       const registration = await apiClient<AuctionRegistration>(
@@ -357,21 +363,8 @@ function RegistrationForm({
         </div>
 
         <div>
-          <label className="mb-1 block text-sm font-medium text-zinc-700">
-            Alamat Tujuan (opsional — kalau menang, dipakai untuk pengiriman)
-          </label>
+          <label className="mb-1 block text-sm font-medium text-zinc-700">Alamat Tujuan</label>
           <ShippingAreaAutocomplete value={destinationArea} onChange={setDestinationArea} />
-        </div>
-
-        <div>
-          <label className="mb-1 block text-sm font-medium text-zinc-700">Kurir Pilihan (opsional)</label>
-          <input
-            type="text"
-            value={courierCode}
-            placeholder="mis. JNE, SiCepat"
-            onChange={(e) => setCourierCode(e.target.value)}
-            className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-[var(--brand-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--brand-primary)]"
-          />
         </div>
 
         {error && <p className="text-sm text-[var(--brand-error)]">{error}</p>}
