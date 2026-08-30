@@ -26,5 +26,5 @@ export default async function ProductDetailPage({ params }: ProductDetailPagePro
 
   const { ProductDetailView } = resolveTemplate(market.template_id);
 
-  return <ProductDetailView marketSlug={params.market_slug} product={product} />;
+  return <ProductDetailView marketSlug={params.market_slug} marketId={market.id} product={product} />;
 }

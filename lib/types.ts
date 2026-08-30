@@ -137,3 +137,67 @@ export interface CheckoutPayload {
   courier_code: string;
   courier_service_name?: string;
 }
+
+export type AuctionRegistrationStatus = 'PENDING_PAYMENT' | 'HELD';
+
+/** Registrasi + deposit lelang — pasangan `Order` di atas tapi untuk mode AUCTION (Fase 3). */
+export interface AuctionRegistration {
+  id: string;
+  market_id: string;
+  product_id: string;
+  buyer_user_id: string;
+  recipient_name: string;
+  phone: string;
+  address: string;
+  destination_area_id: string | null;
+  destination_area_name: string | null;
+  courier_code: string | null;
+  deposit_amount: number;
+  currency: string;
+  escrow_id: string | null;
+  payment_request_id: string | null;
+  checkout_url: string | null;
+  status: AuctionRegistrationStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RegisterAuctionPayload {
+  recipient_name: string;
+  phone: string;
+  address: string;
+  destination_area_id?: string;
+  destination_area_name?: string;
+  courier_code?: string;
+}
+
+export interface AuctionRegistrationMeResponse {
+  registered: boolean;
+  registration: AuctionRegistration | null;
+}
+
+/** Hasil `GET .../deposit-preview`. */
+export interface DepositPreview {
+  deposit_amount: number;
+  currency: string;
+}
+
+/** Satu baris tawaran lelang. */
+export interface AuctionBid {
+  id: string;
+  product_id: string;
+  bidder_user_id: string;
+  amount: number;
+  created_at: string;
+}
+
+/** Hasil `POST .../bids` — bid yang baru dibuat + snapshot produk terbaru. */
+export interface PlaceBidResponse {
+  bid: AuctionBid;
+  product: {
+    current_highest_bid: number | null;
+    highest_bidder_id: string | null;
+    status: ProductStatus;
+    [key: string]: unknown;
+  };
+}

@@ -34,6 +34,8 @@ export interface ProductPublic {
   min_increment: number | null;
   auction_start_at: string | null;
   auction_end_at: string | null;
+  /** Tawaran tertinggi berjalan (Fase 3 — bidding). `null` kalau belum ada tawaran. */
+  current_highest_bid: number | null;
   created_at: string;
   seller_shop_name: string | null;
   weight_grams?: number | null;

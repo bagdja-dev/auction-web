@@ -5,9 +5,11 @@ import { useEffect, useRef, useState, type MouseEvent, type TouchEvent } from 'r
 
 import { ModelViewerElement } from '@/components/upload/model-viewer-element';
 import type { ProductPublic } from '@/lib/api-client';
+import { AuctionPanel } from '@/app/[market_slug]/products/[product_slug]/auction-panel';
 
 export interface ProductDetailViewProps {
   marketSlug: string;
+  marketId: string;
   product: ProductPublic;
 }
 
@@ -76,7 +78,7 @@ interface Slide {
  * Template renderer default untuk halaman detail produk publik — pasangan
  * `CatalogView`, lihat catatan di sana soal resolusi template per Market.
  */
-export default function ProductDetailView({ marketSlug, product }: ProductDetailViewProps) {
+export default function ProductDetailView({ marketSlug, marketId, product }: ProductDetailViewProps) {
   const isAuction = product.mode_jual === 'AUCTION';
   const imageUrls = product.images && product.images.length > 0 ? product.images : [];
   const slides: Slide[] = [
@@ -326,14 +328,18 @@ export default function ProductDetailView({ marketSlug, product }: ProductDetail
           )}
 
           {isAuction ? (
-            <button
-              type="button"
-              disabled
-              title="Fitur bidding segera hadir"
-              className="mt-2 w-full cursor-not-allowed rounded-lg bg-zinc-300 px-4 py-3 text-sm font-medium text-zinc-500"
-            >
-              Ikut Lelang — Segera Hadir
-            </button>
+            <AuctionPanel
+              marketId={marketId}
+              marketSlug={marketSlug}
+              productId={product.id}
+              productSlug={product.slug}
+              startingPrice={product.price}
+              minIncrement={product.min_increment}
+              initialHighestBid={product.current_highest_bid}
+              auctionStartAt={product.auction_start_at}
+              auctionEndAt={product.auction_end_at}
+              productStatus={product.status}
+            />
           ) : product.status === 'published' ? (
             <Link
               href={`/${marketSlug}/products/${product.slug}/checkout`}
