@@ -253,8 +253,13 @@ function RegistrationForm({
   startingPrice: number;
 }) {
   const closed = isClosedForRegistration(productStatus, auctionStartAt, auctionEndAt);
-  const alreadyStarted =
-    productStatus === 'published' && !!auctionStartAt && Date.now() >= new Date(auctionStartAt).getTime();
+  // Dicek dari WAKTU (bukan cuma `productStatus`) supaya pesan tetap benar
+  // walau scheduler penutup lelang belum sempat ubah status ke sold/expired
+  // (mis. Redis/BullMQ belum jalan) — tanpa ini, lelang yang sudah lewat
+  // auction_end_at tapi statusnya masih 'published' salah tampil "sudah
+  // dimulai" padahal seharusnya "sudah berakhir".
+  const hasEnded = productStatus !== 'published' || (!!auctionEndAt && Date.now() >= new Date(auctionEndAt).getTime());
+  const alreadyStarted = !!auctionStartAt && Date.now() >= new Date(auctionStartAt).getTime();
 
   const [deposit, setDeposit] = useState<DepositPreview | null>(null);
   const [depositLoading, setDepositLoading] = useState(true);
@@ -297,7 +302,7 @@ function RegistrationForm({
       <div>
         <HighestBidSummary highestBid={highestBid} startingPrice={startingPrice} />
         <p className="mt-3 text-sm font-medium text-zinc-600">
-          {productStatus !== 'published'
+          {hasEnded
             ? 'Lelang sudah berakhir.'
             : alreadyStarted
               ? 'Pendaftaran sudah ditutup — lelang sudah dimulai.'
