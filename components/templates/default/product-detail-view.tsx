@@ -168,8 +168,8 @@ export default function ProductDetailView({ marketSlug, marketId, product }: Pro
 
   return (
     <main
-      className="mx-auto max-w-5xl px-4 py-8 sm:px-6 md:pb-8"
-      style={mobileActionPanelSpace != null ? { paddingBottom: mobileActionPanelSpace + 16 } : undefined}
+      className="mx-auto max-w-5xl px-4 py-8 pb-40 sm:px-6 md:pb-8"
+      style={mobileActionPanelSpace != null ? { paddingBottom: Math.max(160, mobileActionPanelSpace + 24) } : undefined}
     >
       <Link
         href={`/${marketSlug}`}
