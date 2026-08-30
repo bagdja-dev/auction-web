@@ -15,8 +15,10 @@ export function SoldStamp({ text, subtext }: { text: string; subtext?: string })
         {/* Cincin luar — border tipis, transparan (foto tetap kelihatan di dalamnya). */}
         <div className="absolute inset-0 rounded-full border-[3px] border-red-600" />
 
-        {/* Pita diagonal — fill SOLID supaya teks kontras di atas foto apa pun. */}
-        <div className="w-[90%] border-y-2 border-red-800 bg-red-600 px-1 py-1 text-center shadow-md">
+        {/* Pita diagonal — sengaja LEBIH LEBAR dari cincin (menjorok keluar di
+            kedua sisi, khas rubber stamp) + fill SOLID supaya teks kontras
+            di atas foto apa pun. */}
+        <div className="w-[130%] border-y-2 border-red-800 bg-red-600 px-1 py-1 text-center shadow-md">
           <span className="block text-[9px] font-extrabold uppercase leading-none tracking-wider text-white sm:text-[11px]">
             {text}
           </span>
