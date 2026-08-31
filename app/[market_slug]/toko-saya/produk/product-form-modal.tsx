@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 
 import { Modal } from '@/components/modal';
 import { NumberInput } from '@/components/number-input';
+import { RichTextEditor } from '@/components/rich-text-editor';
 import { ShippingAreaAutocomplete, type ShippingAreaSelection } from '@/components/shipping-area-autocomplete';
 import { GalleryEditor } from '@/components/upload/gallery-editor';
 import { Model3DUpload } from '@/components/upload/model3d-upload';
@@ -38,6 +39,16 @@ interface FormState {
   widthCm: string;
   heightCm: string;
   shippingOrigin: ShippingAreaSelection | null;
+}
+
+// Deskripsi minimal 500 karakter TEKS (bukan HTML mentah) — dicek juga di
+// backend saat publish (`ProductsService.validateForPublish`, BUKAN saat
+// draft/create, lihat komentar di sana). Blok submit di sini murni UX
+// nudge, bukan satu-satunya lapis validasi.
+const MIN_DESCRIPTION_LENGTH = 500;
+
+function plainTextLength(html: string): number {
+  return html.replace(/<[^>]*>/g, '').trim().length;
 }
 
 const EMPTY_FORM: FormState = {
@@ -106,10 +117,13 @@ export function ProductFormModal({ open, onClose, product, onSaved }: ProductFor
   const [slugTouched, setSlugTouched] = useState(isEdit);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [descriptionLength, setDescriptionLength] = useState(0);
 
   useEffect(() => {
     if (!open) return;
-    setForm(product ? productToForm(product) : { ...EMPTY_FORM });
+    const nextForm = product ? productToForm(product) : { ...EMPTY_FORM };
+    setForm(nextForm);
+    setDescriptionLength(plainTextLength(nextForm.description));
     setSlugTouched(!!product);
     setError(null);
   }, [open, product]);
@@ -125,6 +139,10 @@ export function ProductFormModal({ open, onClose, product, onSaved }: ProductFor
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (descriptionLength < MIN_DESCRIPTION_LENGTH) {
+      setError(`Deskripsi minimal ${MIN_DESCRIPTION_LENGTH} karakter (saat ini ${descriptionLength}).`);
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
@@ -203,13 +221,25 @@ export function ProductFormModal({ open, onClose, product, onSaved }: ProductFor
         </div>
 
         <div>
-          <label className="mb-1 block text-sm font-medium text-zinc-700">Deskripsi</label>
-          <textarea
+          <div className="mb-1 flex items-center justify-between">
+            <label className="block text-sm font-medium text-zinc-700">Deskripsi</label>
+            <span className={`text-xs font-medium ${descriptionLength < MIN_DESCRIPTION_LENGTH ? 'text-[var(--brand-error)]' : 'text-green-600'}`}>
+              {descriptionLength} / {MIN_DESCRIPTION_LENGTH} karakter minimum
+            </span>
+          </div>
+          <RichTextEditor
             value={form.description}
-            onChange={(e) => updateField('description', e.target.value)}
-            rows={3}
-            className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-[var(--brand-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--brand-primary)]"
+            onChange={(html, textLength) => {
+              updateField('description', html);
+              setDescriptionLength(textLength);
+            }}
+            placeholder="Ceritakan kondisi, riwayat, keunikan produk selengkap-lengkapnya — deskripsi detail membantu buyer yakin sebelum bid/beli."
           />
+          {descriptionLength < MIN_DESCRIPTION_LENGTH && (
+            <p className="mt-1 text-xs text-zinc-400">
+              Kurang {MIN_DESCRIPTION_LENGTH - descriptionLength} karakter lagi.
+            </p>
+          )}
         </div>
 
         <div>
@@ -343,7 +373,8 @@ export function ProductFormModal({ open, onClose, product, onSaved }: ProductFor
           </button>
           <button
             type="submit"
-            disabled={saving}
+            disabled={saving || descriptionLength < MIN_DESCRIPTION_LENGTH}
+            title={descriptionLength < MIN_DESCRIPTION_LENGTH ? `Deskripsi belum mencapai ${MIN_DESCRIPTION_LENGTH} karakter minimum` : undefined}
             className="rounded-lg bg-[var(--brand-primary)] px-4 py-2 text-sm font-medium text-white transition hover:bg-[var(--brand-primary-hover)] disabled:opacity-50"
           >
             {saving ? 'Menyimpan…' : isEdit ? 'Simpan Perubahan' : 'Simpan sebagai Draft'}

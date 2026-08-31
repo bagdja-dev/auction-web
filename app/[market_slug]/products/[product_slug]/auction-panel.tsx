@@ -1,10 +1,12 @@
 'use client';
 
+import confetti from 'canvas-confetti';
 import Link from 'next/link';
 import { type FormEvent, useEffect, useState } from 'react';
 
 import { NumberInput } from '@/components/number-input';
 import { ShippingAreaAutocomplete, type ShippingAreaSelection } from '@/components/shipping-area-autocomplete';
+import { useAuctionRealtime } from '@/hooks/use-auction-realtime';
 import { useAuth } from '@/hooks/use-auth';
 import { getMarketProductBySlug, type ProductStatus } from '@/lib/api-client';
 import { ApiError, apiClient } from '@/lib/proxy-client';
@@ -32,7 +34,10 @@ export interface AuctionPanelProps {
   readOnly?: boolean;
 }
 
-const POLL_INTERVAL_MS = 3000;
+// Fase 3.B (execution-plan.md) — realtime WebSocket jadi mekanisme utama,
+// polling di bawah cuma fallback reconciliation kalau event terlewat/socket
+// putus, makanya interval dilonggarkan dari 3 detik jadi 30 detik.
+const POLL_INTERVAL_MS = 30_000;
 
 const currencyFormatter = new Intl.NumberFormat('id-ID', {
   style: 'currency',
@@ -510,9 +515,19 @@ function BiddingSection({
   initialProductStatus: ProductStatus;
   readOnly?: boolean;
 }) {
+  const { user } = useAuth();
   const [highestBid, setHighestBid] = useState<number | null>(initialHighestBid);
   const [productStatus, setProductStatus] = useState<ProductStatus>(initialProductStatus);
   const [nowMs, setNowMs] = useState(() => Date.now());
+
+  // Modal pengumuman pemenang (permintaan tambahan 31 Agustus 2026) — cuma
+  // dipicu dari event realtime `auction.closed` status `sold` (bukan
+  // `expired`, tidak ada pemenang buat diumumkan), BUKAN dari transisi
+  // `hasEnded` lokal (waktu lewat belum tentu berarti sudah ada keputusan
+  // pemenang server-side — itu baru pasti begitu `auction.closed` diterima).
+  const [winnerModal, setWinnerModal] = useState<{ winnerUserId: string | null; finalAmount: number | null } | null>(
+    null,
+  );
 
   const minNextBid = highestBid != null ? highestBid + (minIncrement ?? 1) : startingPrice;
 
@@ -565,6 +580,22 @@ function BiddingSection({
     };
   }, [showHistory]);
 
+  const isWinner = winnerModal != null && user != null && winnerModal.winnerUserId === user.userId;
+
+  // Confetti (canvas-confetti, level-page — canvas full-viewport fixed
+  // position, tidak terikat posisi komponen ini) — cuma utk user yang
+  // benar-benar menang, bukan semua penonton (permintaan tambahan 31
+  // Agustus 2026: animasi merayakan kemenangan, bukan efek umum tiap lelang
+  // ditutup).
+  useEffect(() => {
+    if (!isWinner) return;
+    confetti({ particleCount: 150, spread: 90, origin: { y: 0.6 } });
+    const timer = setTimeout(() => {
+      confetti({ particleCount: 80, spread: 120, origin: { y: 0.4 }, angle: 60, startVelocity: 55 });
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [isWinner]);
+
   // Polling harga tertinggi + status produk (fetch publik, tanpa proxy) — STOP begitu lelang berakhir.
   useEffect(() => {
     if (hasEnded) return;
@@ -582,6 +613,30 @@ function BiddingSection({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [marketSlug, productSlug, hasEnded]);
+
+  // Realtime via bagdja-event-service (Fase 3.B) — mekanisme UTAMA update
+  // harga tertinggi, polling di atas cuma fallback. Update state LANGSUNG
+  // dari payload event (tanpa fetch ulang) supaya terasa instan.
+  useAuctionRealtime(
+    productId,
+    user?.userId ?? null,
+    (data) => {
+      setHighestBid(data.current_highest_bid);
+      refreshHistory();
+    },
+    (data) => {
+      setProductStatus(data.status);
+      refreshHistory();
+      if (data.status === 'sold') {
+        setWinnerModal({ winnerUserId: data.winner_user_id, finalAmount: data.final_amount });
+      }
+    },
+    // auction.started (polish 31 Agustus 2026) — paksa recompute `hasStarted`
+    // SEKARANG (bukan nunggu tick 1 detik berikutnya, yang bisa telat kalau
+    // tab browser di-throttle background) supaya peserta yang standby
+    // langsung lihat form bid aktif begitu waktu mulai lewat.
+    () => setNowMs(Date.now()),
+  );
 
   // Tawaran tertinggi bisa naik lewat polling (bukan aksi user ini, mis. bidder
   // lain lebih cepat) — kalau nominal yang lagi diketik kosong atau lebih
@@ -720,6 +775,50 @@ function BiddingSection({
               ) : (
                 <p className="text-xs text-zinc-400">Belum ada tawaran.</p>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {winnerModal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-sm overflow-hidden rounded-2xl bg-white text-center shadow-xl">
+            <div className="space-y-3 p-6">
+              <div className="text-5xl">{isWinner ? '🎉' : '🔨'}</div>
+              <h2 className="text-lg font-bold text-zinc-900">
+                {isWinner ? 'Selamat, Anda Menang!' : 'Lelang Telah Berakhir'}
+              </h2>
+              <p className="text-sm text-zinc-600">
+                {isWinner
+                  ? 'Anda memenangkan lelang ini dengan tawaran tertinggi.'
+                  : `Pemenang: ${history?.find((b) => b.bidder_user_id === winnerModal.winnerUserId)?.bidder_username ?? 'Peserta lain'}`}
+              </p>
+              {winnerModal.finalAmount != null && (
+                <p className="text-2xl font-bold text-[var(--brand-primary)]">
+                  {currencyFormatter.format(winnerModal.finalAmount)}
+                </p>
+              )}
+            </div>
+
+            <div className="flex flex-col gap-2 border-t border-zinc-200 p-4">
+              {isWinner && (
+                <button
+                  type="button"
+                  // Belum ada logic pelunasan (Fase 4 execution-plan.md,
+                  // belum dikerjakan) — tombol sengaja tanpa onClick dulu,
+                  // ditambahkan action-nya begitu Fase 4 mulai dikerjakan.
+                  className="w-full rounded-lg bg-[var(--brand-primary)] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-[var(--brand-primary-hover)]"
+                >
+                  Tebus Sekarang
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setWinnerModal(null)}
+                className="w-full rounded-lg border border-zinc-300 px-4 py-2.5 text-sm font-medium text-zinc-600 transition hover:bg-zinc-50"
+              >
+                Tutup
+              </button>
             </div>
           </div>
         </div>

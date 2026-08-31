@@ -1,5 +1,6 @@
 'use client';
 
+import DOMPurify from 'isomorphic-dompurify';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useEffect, useRef, useState, type MouseEvent, type TouchEvent } from 'react';
@@ -16,6 +17,22 @@ export interface ProductDetailViewProps {
 
 const SWIPE_THRESHOLD_PX = 40;
 const ZOOM_SCALE = 2.2;
+
+// `product.description` = HTML dari WYSIWYG editor (`components/rich-text-editor.tsx`,
+// polish 31 Agustus 2026), sudah disanitasi SEKALI di backend saat simpan
+// (`ProductsService.sanitizeDescription`) — sanitasi KEDUA di sini
+// (defense-in-depth, bukan duplikasi sia-sia): melindungi data lama yang
+// tersimpan sebelum sanitasi backend ada, dan berjaga-jaga kalau ada
+// consumer lain yang menulis ke kolom ini tanpa lewat jalur backend yang
+// sama. Whitelist tag PERSIS sama dengan backend, supaya konsisten.
+const DESCRIPTION_ALLOWED_TAGS = ['p', 'br', 'strong', 'b', 'em', 'i', 'u', 's', 'strike', 'del', 'h2', 'h3', 'ul', 'ol', 'li', 'a'];
+
+function sanitizeDescriptionHtml(html: string): string {
+  return DOMPurify.sanitize(html, {
+    ALLOWED_TAGS: DESCRIPTION_ALLOWED_TAGS,
+    ALLOWED_ATTR: ['href', 'target', 'rel'],
+  });
+}
 
 const currencyFormatter = new Intl.NumberFormat('id-ID', {
   style: 'currency',
@@ -335,7 +352,10 @@ export default function ProductDetailView({ marketSlug, marketId, product }: Pro
 
         <div className="order-3 space-y-3">
           {product.description && (
-            <p className="whitespace-pre-line text-sm leading-relaxed text-zinc-700">{product.description}</p>
+            <div
+              className="text-sm leading-relaxed text-zinc-700 [&_a]:text-[var(--brand-primary)] [&_a]:underline [&_h2]:mb-2 [&_h2]:mt-3 [&_h2]:text-lg [&_h2]:font-bold [&_h3]:mb-1 [&_h3]:mt-2 [&_h3]:text-base [&_h3]:font-semibold [&_li]:ml-4 [&_ol]:list-decimal [&_p]:mb-2 [&_ul]:list-disc"
+              dangerouslySetInnerHTML={{ __html: sanitizeDescriptionHtml(product.description) }}
+            />
           )}
         </div>
         </div>
