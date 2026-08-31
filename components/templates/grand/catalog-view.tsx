@@ -1,6 +1,7 @@
 import Link from 'next/link';
 
 import type { Market, PaginatedResult, ProductModeJual, ProductPublic } from '@/lib/api-client';
+import { MarketAppBar } from '@/components/market-app-bar';
 import ModeFilter from '../default/mode-filter';
 import ProductCardGrand from './product-card';
 
@@ -11,6 +12,7 @@ export interface CatalogViewProps {
   page: number;
   modeJual: ProductModeJual | undefined;
   isLoggedIn: boolean;
+  displayName?: string;
 }
 
 /**
@@ -26,30 +28,20 @@ export default function CatalogView({
   page,
   modeJual,
   isLoggedIn,
+  displayName,
 }: CatalogViewProps) {
   const { items, total, size } = products;
   const totalPages = Math.max(1, Math.ceil(total / size));
 
   return (
     <main className="theme-grand mx-auto max-w-6xl px-4 py-8 sm:px-6">
-      <header className="sticky top-0 z-10 mb-8 flex flex-wrap items-center justify-between gap-4 border-b-2 border-[var(--grand-peach)] bg-white pb-6 pt-4">
-        <h1 className="text-2xl font-semibold text-[var(--brand-primary)]">{market.name}</h1>
-        {isLoggedIn ? (
-          <Link
-            href={`/${marketSlug}/toko-saya`}
-            className="rounded-lg bg-[var(--brand-primary)] px-4 py-2 text-sm font-medium text-white transition hover:bg-[var(--brand-primary-hover)]"
-          >
-            Toko Saya
-          </Link>
-        ) : (
-          <Link
-            href={`/auth/login?next=${encodeURIComponent(`/${marketSlug}/toko-saya`)}`}
-            className="rounded-lg border border-[var(--brand-primary)] px-4 py-2 text-sm font-medium text-[var(--brand-primary)] transition hover:bg-zinc-50"
-          >
-            Masuk
-          </Link>
-        )}
-      </header>
+      <MarketAppBar
+        marketSlug={marketSlug}
+        isLoggedIn={isLoggedIn}
+        displayName={displayName}
+        borderClassName="border-b-2 border-[var(--grand-peach)]"
+        left={<h1 className="text-2xl font-semibold text-[var(--brand-primary)]">{market.name}</h1>}
+      />
 
       <div className="mb-6 flex items-center justify-between gap-4">
         <p className="text-sm text-zinc-500">{total} produk</p>

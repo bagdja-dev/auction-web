@@ -42,6 +42,7 @@ export default async function MarketCatalogPage({ params, searchParams }: Market
       page={page}
       modeJual={modeJual}
       isLoggedIn={Boolean(user)}
+      displayName={user?.username ?? user?.email ?? undefined}
     />
   );
 }

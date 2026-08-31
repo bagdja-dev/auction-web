@@ -18,31 +18,57 @@ const currencyFormatter = new Intl.NumberFormat('id-ID', {
  * Dashboard home Toko Saya — di mobile ini juga jadi HALAMAN NAVIGASI utama
  * (grid ikon menu di bawah, `md:hidden`) karena tidak ada sidebar di layar
  * kecil. Di desktop, grid ikon ini disembunyikan karena sudah ada sidebar.
+ *
+ * Layout SELALU utuh (saldo + stats + menu) — polish 31 Agustus 2026 (revisi
+ * kedua): percobaan pertama mengganti SELURUH dashboard dengan card CTA
+ * kalau belum ada toko ternyata bukan yang diminta user — yang benar cuma
+ * bagian IDENTITAS TOKO (nama+status) yang berubah jadi "Belum ada toko" +
+ * tombol "Buat Toko", sisanya (saldo, stats, menu) tetap tampil seperti
+ * biasa.
  */
 export default function DashboardContent() {
-  const { marketId, marketSlug, seller } = useTokoSaya();
+  const { marketId, marketSlug, seller, registerSeller, registering, registerError } = useTokoSaya();
 
   const [wallet, setWallet] = useState<WalletBalance | null>(null);
   const [walletError, setWalletError] = useState<string | null>(null);
   const [products, setProducts] = useState<Product[] | null>(null);
 
+  // Saldo itu wallet PERSONAL (per userId login, sama seperti seluruh
+  // platform Bagdja lainnya) — BUKAN milik toko, jadi tetap di-fetch walau
+  // belum ada toko sama sekali (beda dari revisi pertama yang salah
+  // menyamakan ini dengan data yang scoped-ke-toko).
   useEffect(() => {
     let cancelled = false;
-
     apiClient<WalletBalance>('/api/wallet/balance')
       .then((data) => !cancelled && setWallet(data))
       .catch(() => !cancelled && setWalletError('Gagal memuat saldo.'));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
+  // Produk BENAR scoped ke toko (`SellerOwnershipGuard` di backend) — kalau
+  // belum ada toko, langsung anggap kosong (stats semua 0) tanpa panggil
+  // API sama sekali, bukan `null` selamanya (yang bikin UI stuck di "—").
+  useEffect(() => {
+    if (!seller) {
+      setProducts([]);
+      return;
+    }
+    let cancelled = false;
     apiClient<Product[]>(`/api/markets/${marketId}/products/mine`)
       .then((data) => !cancelled && setProducts(data))
       .catch(() => {
         /* statistik cukup diam kalau gagal, bukan bagian kritis halaman ini */
       });
-
     return () => {
       cancelled = true;
     };
-  }, [marketId]);
+  }, [marketId, seller]);
+
+  async function handleCreateShop() {
+    await registerSeller();
+  }
 
   const stats = {
     total: products?.length ?? 0,
@@ -54,10 +80,30 @@ export default function DashboardContent() {
   return (
     <div className="space-y-6">
       <section>
-        <h1 className="text-lg font-semibold text-zinc-900">
-          {seller.shop_name || 'Toko tanpa nama'}
-        </h1>
-        <p className="text-sm text-zinc-500">Status: {seller.is_active ? 'Aktif' : 'Nonaktif'}</p>
+        {seller ? (
+          <>
+            <h1 className="text-lg font-semibold text-zinc-900">
+              {seller.shop_name || 'Toko tanpa nama'}
+            </h1>
+            <p className="text-sm text-zinc-500">Status: {seller.is_active ? 'Aktif' : 'Nonaktif'}</p>
+          </>
+        ) : (
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h1 className="text-lg font-semibold text-zinc-900">Belum ada toko</h1>
+              <p className="text-sm text-zinc-500">Buat toko dulu untuk mulai berjualan di Market ini.</p>
+              {registerError && <p className="mt-1 text-sm text-[var(--brand-error)]">{registerError}</p>}
+            </div>
+            <button
+              type="button"
+              onClick={handleCreateShop}
+              disabled={registering}
+              className="shrink-0 rounded-lg bg-[var(--brand-primary)] px-4 py-2 text-sm font-medium text-white transition hover:bg-[var(--brand-primary-hover)] disabled:opacity-50"
+            >
+              {registering ? 'Membuat…' : 'Buat Toko'}
+            </button>
+          </div>
+        )}
       </section>
 
       <section className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">

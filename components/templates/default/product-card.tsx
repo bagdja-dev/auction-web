@@ -2,6 +2,7 @@ import Link from 'next/link';
 
 import type { Market, ProductPublic } from '@/lib/api-client';
 import { getCatalogStatusLabel } from '@/lib/product-status';
+import { AuctionCountdown } from '@/components/auction-countdown';
 import { SoldStamp } from '@/components/sold-stamp';
 
 const currencyFormatter = new Intl.NumberFormat('id-ID', {
@@ -80,6 +81,13 @@ export default function ProductCard({
             <p>Estimasi: {currencyFormatter.format(product.price)}</p>
             <p>Buka: {formatDateTime(product.auction_start_at)}</p>
             <p>Tutup: {formatDateTime(product.auction_end_at)}</p>
+            <AuctionCountdown
+              compact
+              status={product.status}
+              auctionStartAt={product.auction_start_at}
+              auctionEndAt={product.auction_end_at}
+              registrationDeadlineMinutes={market.registration_deadline_minutes}
+            />
           </div>
         ) : (
           <p className="mt-1 text-base font-semibold text-[var(--brand-primary)]">

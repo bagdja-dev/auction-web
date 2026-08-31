@@ -31,7 +31,7 @@ const STATUS_BADGE_CLASS: Record<Product['status'], string> = {
 
 /** List produk sendiri BERBASIS GRID (bukan tabel/list) + tambah/edit lewat Modal. */
 export default function ProdukContent() {
-  const { marketId, marketSlug } = useTokoSaya();
+  const { marketId, marketSlug, seller } = useTokoSaya();
 
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
@@ -39,6 +39,19 @@ export default function ProdukContent() {
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  // Bug ditemukan 31 Agustus 2026: `ProductFormModal` TIDAK PERNAH unmount
+  // (komponen React yang sama sepanjang hidup halaman ini — cuma anaknya,
+  // `<Modal>`, yang unmount/remount lewat `if (!open) return null`), jadi
+  // state form internalnya di-seed ulang lewat `useEffect` yang jalan SATU
+  // RENDER SETELAH modal kebuka — render pertama (termasuk `RichTextEditor`
+  // yang baru pertama kali mount di render itu) sempat pakai state LAMA
+  // sebelum di-seed. Efeknya: deskripsi hasil duplicate/edit produk lain
+  // kadang tidak nempel ke editor WYSIWYG. `key` di bawah memaksa
+  // `ProductFormModal` remount TOTAL tiap kali dibuka (produk apa pun,
+  // termasuk buka form "Tambah Baru" dua kali berturut-turut) — state
+  // internalnya jadi bisa lazy-init LANGSUNG dari `product` di render
+  // pertama, tidak ada lagi render "stale" sebelum ke-seed.
+  const [modalSessionKey, setModalSessionKey] = useState(0);
 
   const [busyId, setBusyId] = useState<string | null>(null);
   const [rowError, setRowError] = useState<Record<string, string>>({});
@@ -55,18 +68,24 @@ export default function ProdukContent() {
     }
   }, [marketId]);
 
+  // Belum daftar toko (polish 31 Agustus 2026) — endpoint ini scoped ke
+  // seller pemanggil (`SellerOwnershipGuard`), tidak ada gunanya dipanggil
+  // kalau seller-nya belum ada sama sekali.
   useEffect(() => {
+    if (!seller) return;
     void loadProducts();
-  }, [loadProducts]);
+  }, [loadProducts, seller]);
 
   function openCreateModal() {
     setEditingProduct(null);
     setModalOpen(true);
+    setModalSessionKey((k) => k + 1);
   }
 
   function openEditModal(product: Product) {
     setEditingProduct(product);
     setModalOpen(true);
+    setModalSessionKey((k) => k + 1);
   }
 
   async function handlePublish(productId: string) {
@@ -138,6 +157,21 @@ export default function ProdukContent() {
     } finally {
       setBusyId(null);
     }
+  }
+
+  if (!seller) {
+    return (
+      <div className="space-y-4">
+        <PageTitle>Produk Saya</PageTitle>
+        <p className="rounded-xl border border-zinc-200 bg-white p-6 text-sm text-zinc-500 shadow-sm">
+          Anda belum punya toko di Market ini. Buat toko dulu lewat halaman{' '}
+          <Link href={`/${marketSlug}/toko-saya`} className="font-medium text-[var(--brand-primary)] hover:underline">
+            Dashboard
+          </Link>
+          .
+        </p>
+      </div>
+    );
   }
 
   return (
@@ -269,6 +303,7 @@ export default function ProdukContent() {
       )}
 
       <ProductFormModal
+        key={modalSessionKey}
         open={modalOpen}
         onClose={() => setModalOpen(false)}
         product={editingProduct}

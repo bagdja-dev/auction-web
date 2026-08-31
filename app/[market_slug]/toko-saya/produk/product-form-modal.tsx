@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 
 import { Modal } from '@/components/modal';
 import { NumberInput } from '@/components/number-input';
@@ -113,20 +113,20 @@ export function ProductFormModal({ open, onClose, product, onSaved }: ProductFor
   const { marketId } = useTokoSaya();
   const isEdit = !!product;
 
-  const [form, setForm] = useState<FormState>(EMPTY_FORM);
+  // Lazy-init LANGSUNG dari `product` (bukan `useEffect` setelah render) —
+  // bug ditemukan 31 Agustus 2026: komponen ini di-remount penuh tiap kali
+  // modal dibuka (lihat `key={modalSessionKey}` di `produk-content.tsx`),
+  // jadi initializer di sini SELALU jalan dengan `product` yang benar sejak
+  // render PERTAMA. Pendekatan lama (`useState(EMPTY_FORM)` + `useEffect`
+  // seed) punya jendela satu-render dengan state STALE sebelum effect
+  // sempat jalan — `RichTextEditor` yang baru mount di render pertama itu
+  // sempat menerima `value` lama/kosong, hasil duplicate/edit produk lain
+  // kadang tidak nempel ke editor.
+  const [form, setForm] = useState<FormState>(() => (product ? productToForm(product) : EMPTY_FORM));
   const [slugTouched, setSlugTouched] = useState(isEdit);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [descriptionLength, setDescriptionLength] = useState(0);
-
-  useEffect(() => {
-    if (!open) return;
-    const nextForm = product ? productToForm(product) : { ...EMPTY_FORM };
-    setForm(nextForm);
-    setDescriptionLength(plainTextLength(nextForm.description));
-    setSlugTouched(!!product);
-    setError(null);
-  }, [open, product]);
+  const [descriptionLength, setDescriptionLength] = useState(() => plainTextLength(form.description));
 
   function updateField<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -228,6 +228,21 @@ export function ProductFormModal({ open, onClose, product, onSaved }: ProductFor
             </span>
           </div>
           <RichTextEditor
+            // `key` per produk (bukan cuma prop `value`) — bug ditemukan 31
+            // Agustus 2026: data `description` SUDAH benar sampai ke server
+            // (diverifikasi lewat DB, hasil duplicate tersimpan lengkap),
+            // tapi editor TipTap yang di-reuse across produk berbeda TIDAK
+            // SELALU reaktif ke `value` baru lewat effect sync biasa
+            // (`editor.commands.setContent()`) — kadang telat/tidak nempel,
+            // khususnya begitu editor baru saja selesai dibuat
+            // (`immediatelyRender:false`) tepat saat modal baru dibuka utk
+            // produk lain. `key` MEMAKSA React remount total instance
+            // editor tiap ganti produk (create baru vs edit produk lain vs
+            // hasil duplicate) — pola standar React utk komponen ber-state
+            // internal kompleks yang tidak reliable disinkronkan lewat props
+            // saja, jauh lebih robust daripada terus bergantung ke effect
+            // sync internal `RichTextEditor`.
+            key={product?.id ?? 'new'}
             value={form.description}
             onChange={(html, textLength) => {
               updateField('description', html);

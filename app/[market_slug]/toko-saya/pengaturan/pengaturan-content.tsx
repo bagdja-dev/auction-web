@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useState } from 'react';
 
 import { ApiError, apiClient } from '@/lib/proxy-client';
@@ -8,12 +9,31 @@ import { useTokoSaya } from '../_components/toko-saya-context';
 import { PageTitle } from '../_components/page-title';
 
 export default function PengaturanContent() {
-  const { marketId, seller, refreshSeller } = useTokoSaya();
+  const { marketId, marketSlug, seller, refreshSeller } = useTokoSaya();
 
-  const [shopName, setShopName] = useState(seller.shop_name ?? '');
+  // Inisialisasi dari `seller?.shop_name` (bisa `null` — belum daftar toko,
+  // polish 31 Agustus 2026) — hook TIDAK BOLEH dipanggil kondisional
+  // (Rules of Hooks), jadi guard "belum punya toko" di bawah dilakukan
+  // SETELAH semua hook, bukan early-return sebelum `useState` ini.
+  const [shopName, setShopName] = useState(seller?.shop_name ?? '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+
+  if (!seller) {
+    return (
+      <div className="max-w-md space-y-4">
+        <PageTitle>Pengaturan Toko</PageTitle>
+        <p className="rounded-xl border border-zinc-200 bg-white p-6 text-sm text-zinc-500 shadow-sm">
+          Anda belum punya toko di Market ini. Buat toko dulu lewat halaman{' '}
+          <Link href={`/${marketSlug}/toko-saya`} className="font-medium text-[var(--brand-primary)] hover:underline">
+            Dashboard
+          </Link>
+          .
+        </p>
+      </div>
+    );
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();

@@ -30,6 +30,7 @@ export interface AuctionPanelProps {
   auctionStartAt: string | null;
   auctionEndAt: string | null;
   productStatus: ProductStatus;
+  registrationDeadlineMinutes: number | null;
   /** Mode lihat-saja untuk pemilik produk (dibuka dari "Toko Saya" lewat `?view=owner`) — lihat sesi lelang tanpa bisa daftar/menawar. */
   readOnly?: boolean;
 }
@@ -54,14 +55,28 @@ function formatDateTime(iso: string | null): string {
   })}`;
 }
 
+/**
+ * `registrationDeadlineMinutes` (polish 31 Agustus 2026) — SEBELUMNYA cuma
+ * cek `auctionStartAt`/`auctionEndAt`, padahal backend
+ * (`AuctionRegistrationsService.register()`) juga menolak lebih awal kalau
+ * `Market.registration_deadline_minutes` diisi (batas menit SEBELUM
+ * `auction_start_at`). Celah ini bikin form tampak masih aktif padahal
+ * submit-nya pasti 400 — ditemukan & ditutup di sini, dihitung ulang persis
+ * sama dengan logic backend.
+ */
 function isClosedForRegistration(
   productStatus: ProductStatus,
   auctionStartAt: string | null,
   auctionEndAt: string | null,
+  registrationDeadlineMinutes: number | null,
 ): boolean {
   if (productStatus !== 'published') return true;
   if (auctionEndAt && Date.now() >= new Date(auctionEndAt).getTime()) return true;
   if (auctionStartAt && Date.now() >= new Date(auctionStartAt).getTime()) return true;
+  if (auctionStartAt && registrationDeadlineMinutes != null) {
+    const deadline = new Date(auctionStartAt).getTime() - registrationDeadlineMinutes * 60_000;
+    if (Date.now() >= deadline) return true;
+  }
   return false;
 }
 
@@ -105,6 +120,7 @@ export function AuctionPanel({
   auctionStartAt,
   auctionEndAt,
   productStatus,
+  registrationDeadlineMinutes,
   readOnly = false,
 }: AuctionPanelProps) {
   const { isLoggedIn, loading: authLoading } = useAuth();
@@ -206,6 +222,7 @@ export function AuctionPanel({
           productStatus={productStatus}
           auctionStartAt={auctionStartAt}
           auctionEndAt={auctionEndAt}
+          registrationDeadlineMinutes={registrationDeadlineMinutes}
           highestBid={initialHighestBid}
           startingPrice={startingPrice}
         />
@@ -246,6 +263,7 @@ function RegistrationForm({
   productStatus,
   auctionStartAt,
   auctionEndAt,
+  registrationDeadlineMinutes,
   highestBid,
   startingPrice,
 }: {
@@ -254,10 +272,11 @@ function RegistrationForm({
   productStatus: ProductStatus;
   auctionStartAt: string | null;
   auctionEndAt: string | null;
+  registrationDeadlineMinutes: number | null;
   highestBid: number | null;
   startingPrice: number;
 }) {
-  const closed = isClosedForRegistration(productStatus, auctionStartAt, auctionEndAt);
+  const closed = isClosedForRegistration(productStatus, auctionStartAt, auctionEndAt, registrationDeadlineMinutes);
   // Dicek dari WAKTU (bukan cuma `productStatus`) supaya pesan tetap benar
   // walau scheduler penutup lelang belum sempat ubah status ke sold/expired
   // (mis. Redis/BullMQ belum jalan) — tanpa ini, lelang yang sudah lewat

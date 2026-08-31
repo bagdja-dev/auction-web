@@ -5,14 +5,19 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useEffect, useRef, useState, type MouseEvent, type TouchEvent } from 'react';
 
+import { AuctionCountdown } from '@/components/auction-countdown';
+import { MarketAppBar } from '@/components/market-app-bar';
 import { ModelViewerElement } from '@/components/upload/model-viewer-element';
+import { useAuth } from '@/hooks/use-auth';
 import type { ProductPublic } from '@/lib/api-client';
 import { AuctionPanel } from '@/app/[market_slug]/products/[product_slug]/auction-panel';
 
 export interface ProductDetailViewProps {
   marketSlug: string;
   marketId: string;
+  marketName: string;
   product: ProductPublic;
+  registrationDeadlineMinutes: number | null;
 }
 
 const SWIPE_THRESHOLD_PX = 40;
@@ -96,7 +101,15 @@ interface Slide {
  * Template renderer default untuk halaman detail produk publik — pasangan
  * `CatalogView`, lihat catatan di sana soal resolusi template per Market.
  */
-export default function ProductDetailView({ marketSlug, marketId, product }: ProductDetailViewProps) {
+export default function ProductDetailView({
+  marketSlug,
+  marketId,
+  marketName,
+  product,
+  registrationDeadlineMinutes,
+}: ProductDetailViewProps) {
+  const { user, isLoggedIn } = useAuth();
+  const displayName = user?.username ?? user?.email ?? undefined;
   const searchParams = useSearchParams();
   const isOwnerView = searchParams.get('view') === 'owner';
   const isAuction = product.mode_jual === 'AUCTION';
@@ -188,12 +201,19 @@ export default function ProductDetailView({ marketSlug, marketId, product }: Pro
       className="mx-auto max-w-5xl px-4 py-8 pb-40 sm:px-6 md:pb-8"
       style={mobileActionPanelSpace != null ? { paddingBottom: Math.max(160, mobileActionPanelSpace + 24) } : undefined}
     >
-      <Link
-        href={`/${marketSlug}`}
-        className="mb-6 inline-block text-sm text-zinc-500 hover:text-[var(--brand-primary)]"
-      >
-        ← Kembali ke katalog
-      </Link>
+      <MarketAppBar
+        marketSlug={marketSlug}
+        isLoggedIn={isLoggedIn}
+        displayName={displayName}
+        left={
+          <Link
+            href={`/${marketSlug}`}
+            className="flex items-center gap-1.5 text-sm font-medium text-zinc-600 hover:text-[var(--brand-primary)]"
+          >
+            ← Kembali ke {marketName}
+          </Link>
+        }
+      />
 
       <div className="grid items-start gap-8 md:grid-cols-2">
         {/* Kolom media (kiri di desktop): carousel + deskripsi mengalir sebagai
@@ -392,6 +412,14 @@ export default function ProductDetailView({ marketSlug, marketId, product }: Pro
               {product.min_increment != null && (
                 <p>Kelipatan tawar minimum: {currencyFormatter.format(product.min_increment)}</p>
               )}
+              <div className="pt-1">
+                <AuctionCountdown
+                  status={product.status}
+                  auctionStartAt={product.auction_start_at}
+                  auctionEndAt={product.auction_end_at}
+                  registrationDeadlineMinutes={registrationDeadlineMinutes}
+                />
+              </div>
             </div>
           )}
         </div>
@@ -414,6 +442,7 @@ export default function ProductDetailView({ marketSlug, marketId, product }: Pro
                 auctionStartAt={product.auction_start_at}
                 auctionEndAt={product.auction_end_at}
                 productStatus={product.status}
+                registrationDeadlineMinutes={registrationDeadlineMinutes}
                 readOnly={isOwnerView}
               />
             ) : isOwnerView ? (

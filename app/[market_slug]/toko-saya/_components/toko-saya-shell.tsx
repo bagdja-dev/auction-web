@@ -21,8 +21,11 @@ interface TokoSayaShellProps {
 /**
  * Shell responsive untuk seluruh halaman "Toko Saya":
  * - Topbar sticky (kembali ke katalog + avatar) di semua ukuran layar.
- * - Gate registrasi seller — kalau user belum terdaftar, SEMUA route
- *   `/toko-saya/*` menampilkan form daftar ini saja (children diabaikan).
+ * - Dashboard/sidebar/navigasi SELALU bisa diakses meski user belum daftar
+ *   toko (polish 31 Agustus 2026 — SEBELUMNYA ada gate full-page yang
+ *   blokir `children` total sampai user daftar; sekarang `seller` (nullable)
+ *   diteruskan apa adanya lewat context, tombol "Buat Toko" ada di dalam
+ *   `DashboardContent`, bukan menghalangi akses ke shell-nya).
  * - ≥md: sidebar navigasi tetap di kiri (collapsible, tersimpan di
  *   localStorage) + children di kanan.
  * - <md: tanpa sidebar — navigasi antar halaman lewat grid ikon menu di
@@ -35,7 +38,6 @@ export function TokoSayaShell({ marketId, marketSlug, marketName, children }: To
   const [seller, setSeller] = useState<Seller | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  const [shopName, setShopName] = useState('');
   const [registering, setRegistering] = useState(false);
   const [registerError, setRegisterError] = useState<string | null>(null);
 
@@ -79,8 +81,8 @@ export function TokoSayaShell({ marketId, marketSlug, marketName, children }: To
     });
   }
 
-  async function handleRegister(e: React.FormEvent) {
-    e.preventDefault();
+  /** Dipakai `DashboardContent` (tombol "Buat Toko") — bukan lagi form inline di shell ini. */
+  const registerSeller = useCallback(async (shopName?: string) => {
     setRegistering(true);
     setRegisterError(null);
     try {
@@ -94,7 +96,7 @@ export function TokoSayaShell({ marketId, marketSlug, marketName, children }: To
     } finally {
       setRegistering(false);
     }
-  }
+  }, [marketId]);
 
   const displayName = user?.username ?? user?.email ?? 'Seller';
   const initials = displayName.charAt(0).toUpperCase();
@@ -138,53 +140,22 @@ export function TokoSayaShell({ marketId, marketSlug, marketName, children }: To
     );
   }
 
-  if (!seller) {
-    return (
-      <div className="min-h-screen bg-zinc-50">
-        {topbar}
-        <main className="mx-auto max-w-md px-4 py-10 sm:px-6">
-          <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
-            <h1 className="mb-2 text-lg font-semibold text-[var(--brand-primary)]">Daftar sebagai Seller</h1>
-            <p className="mb-4 text-sm text-zinc-500">
-              Kamu belum terdaftar sebagai seller di <strong>{marketName}</strong>. Daftar dulu untuk
-              mulai menjual produk.
-            </p>
-            {loadError && <p className="mb-3 text-sm text-[var(--brand-error)]">{loadError}</p>}
-            <form onSubmit={handleRegister} className="space-y-3">
-              <div>
-                <label className="mb-1 block text-sm font-medium text-zinc-700">Nama Toko (opsional)</label>
-                <input
-                  type="text"
-                  value={shopName}
-                  onChange={(e) => setShopName(e.target.value)}
-                  placeholder="Toko Saya"
-                  className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-[var(--brand-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--brand-primary)]"
-                />
-              </div>
-              {registerError && <p className="text-sm text-[var(--brand-error)]">{registerError}</p>}
-              <button
-                type="submit"
-                disabled={registering}
-                className="w-full rounded-lg bg-[var(--brand-primary)] px-4 py-2 text-sm font-medium text-white transition hover:bg-[var(--brand-primary-hover)] disabled:opacity-50"
-              >
-                {registering ? 'Mendaftar…' : 'Daftar sebagai Seller'}
-              </button>
-            </form>
-          </div>
-        </main>
-      </div>
-    );
-  }
-
   return (
     <TokoSayaProvider
-      value={{ marketId, marketSlug, marketName, seller, refreshSeller: loadSellerStatus }}
+      value={{ marketId, marketSlug, marketName, seller, refreshSeller: loadSellerStatus, registerSeller, registering, registerError }}
     >
       <div className="flex h-screen flex-col overflow-hidden bg-zinc-50">
         {topbar}
         <div className="flex flex-1 overflow-hidden">
           <TokoSayaSidebar marketSlug={marketSlug} collapsed={collapsed} onToggleCollapsed={toggleCollapsed} />
-          <main className="min-w-0 flex-1 overflow-y-auto px-4 py-6 sm:px-6 md:py-8">{children}</main>
+          <main className="min-w-0 flex-1 overflow-y-auto px-4 py-6 sm:px-6 md:py-8">
+            {loadError && (
+              <p className="mb-4 rounded-lg border border-[var(--brand-error)] bg-red-50 px-3 py-2 text-sm text-[var(--brand-error)]">
+                {loadError}
+              </p>
+            )}
+            {children}
+          </main>
         </div>
       </div>
     </TokoSayaProvider>

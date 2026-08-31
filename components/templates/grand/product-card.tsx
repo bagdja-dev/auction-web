@@ -2,6 +2,7 @@ import Link from 'next/link';
 
 import type { Market, ProductPublic } from '@/lib/api-client';
 import { getCatalogStatusLabel } from '@/lib/product-status';
+import { AuctionCountdown } from '@/components/auction-countdown';
 import { SoldStamp } from '@/components/sold-stamp';
 
 const currencyFormatter = new Intl.NumberFormat('id-ID', {
@@ -74,9 +75,20 @@ export default function ProductCardGrand({
       <div className="px-0.5 pt-2.5">
         <h3 className="line-clamp-2 text-sm font-medium text-zinc-900">{product.name}</h3>
         {isAuction ? (
-          <p className="mt-0.5 text-xs text-zinc-500">
-            Estimasi {currencyFormatter.format(product.price)} · tutup {formatDate(product.auction_end_at)}
-          </p>
+          <>
+            <p className="mt-0.5 text-xs text-zinc-500">
+              Estimasi {currencyFormatter.format(product.price)} · tutup {formatDate(product.auction_end_at)}
+            </p>
+            <div className="mt-0.5">
+              <AuctionCountdown
+                compact
+                status={product.status}
+                auctionStartAt={product.auction_start_at}
+                auctionEndAt={product.auction_end_at}
+                registrationDeadlineMinutes={market.registration_deadline_minutes}
+              />
+            </div>
+          </>
         ) : (
           <p className="mt-0.5 text-sm font-semibold text-[var(--brand-primary)]">
             {currencyFormatter.format(product.price)}
