@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 
 import { FulfillmentProgress } from '@/components/fulfillment-progress';
+import { ProductMediaGallery } from '@/components/product-media-gallery';
 import { ApiError, apiClient } from '@/lib/proxy-client';
 import type { Order } from '@/lib/types';
 import { PageTitle } from '../../_components/page-title';
@@ -98,6 +99,17 @@ export function OrderStatusClient({ marketSlug, marketId, orderId, statusHint }:
           <p className="text-sm font-medium text-green-800">Pembayaran berhasil!</p>
           <p className="mt-1 text-sm text-green-700">Dana ditahan di escrow, produk sudah jadi milik Anda.</p>
         </div>
+        {order?.product && (
+          <div className="space-y-2">
+            <h2 className="text-sm font-semibold text-zinc-700">{order.product.name}</h2>
+            <ProductMediaGallery
+              images={order.product.images}
+              videoUrl={order.product.video_url}
+              model3dUrl={order.product.model3d_url}
+              alt={order.product.name}
+            />
+          </div>
+        )}
         {order && (
           <div className="space-y-1 rounded-lg border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-700">
             <p>

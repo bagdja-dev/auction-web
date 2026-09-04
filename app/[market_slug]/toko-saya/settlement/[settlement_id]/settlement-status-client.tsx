@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 
 import { FulfillmentProgress } from '@/components/fulfillment-progress';
+import { ProductMediaGallery } from '@/components/product-media-gallery';
 import { ApiError, apiClient } from '@/lib/proxy-client';
 import type { AuctionSettlement } from '@/lib/types';
 import { PageTitle } from '../../_components/page-title';
@@ -100,6 +101,17 @@ export function SettlementStatusClient({ marketSlug, marketId, settlementId, sta
           <p className="text-sm font-medium text-green-800">Pelunasan berhasil!</p>
           <p className="mt-1 text-sm text-green-700">Dana ditahan di escrow — barang akan segera dikirim seller.</p>
         </div>
+        {settlement?.product && (
+          <div className="space-y-2">
+            <h2 className="text-sm font-semibold text-zinc-700">{settlement.product.name}</h2>
+            <ProductMediaGallery
+              images={settlement.product.images}
+              videoUrl={settlement.product.video_url}
+              model3dUrl={settlement.product.model3d_url}
+              alt={settlement.product.name}
+            />
+          </div>
+        )}
         {settlement && (
           <div className="space-y-1 rounded-lg border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-700">
             <p>

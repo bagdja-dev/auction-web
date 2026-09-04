@@ -104,6 +104,15 @@ export interface WalletBalance {
 
 export type OrderStatus = 'PENDING_PAYMENT' | 'HELD' | 'FAILED';
 
+/** Ringkasan produk untuk galeri media (`ProductMediaGallery`) — ditempel di `GET :id` Order/Settlement, lihat `common/dto/product-media-summary.dto.ts` (backend). */
+export interface ProductMediaSummary {
+  name: string;
+  slug: string;
+  images: string[] | null;
+  video_url: string | null;
+  model3d_url: string | null;
+}
+
 export interface Order {
   id: string;
   market_id: string;
@@ -126,6 +135,14 @@ export interface Order {
   destination_area_name: string | null;
   courier_code: string;
   courier_service_name: string | null;
+  /** Cuma terisi di `GET .../orders/:orderId` (relasi `product` di-load di sana). */
+  product?: ProductMediaSummary;
+}
+
+/** Hasil `GET .../products/:productId/order` — sisi SELLER, dipakai `listing-detail-content.tsx` untuk lihat alamat kirim buyer. */
+export interface OrderForSellerResponse {
+  exists: boolean;
+  order: Order | null;
 }
 
 export interface CheckoutPayload {
@@ -221,6 +238,8 @@ export interface AuctionSettlement {
   status: AuctionSettlementStatus;
   created_at: string;
   updated_at: string;
+  /** Cuma terisi di `GET .../settlements/:id` (relasi `product` di-load di sana). */
+  product?: ProductMediaSummary;
 }
 
 export interface AuctionSettlementMeResponse {
@@ -312,6 +331,7 @@ export interface PurchaseRow {
   product_id: string;
   product_name: string;
   product_slug: string;
+  product_image: string | null;
   mode_jual: ProductModeJual;
   category: PurchaseCategory;
   amount: number;

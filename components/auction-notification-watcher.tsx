@@ -34,10 +34,17 @@ const currencyFormatter = new Intl.NumberFormat('id-ID', {
  *   belum daftar toko di Market ini, dicek dulu via `sellers/me`, pola sama
  *   `dashboard-content.tsx`), difilter `mode_jual='AUCTION' && status='published'`.
  *
- * Event yang di-global-kan: `auction.bid_placed` (seller SELALU dinotif
- * setiap ada bid baru di listingnya; buyer HANYA dinotif kalau baru
- * ter-outbid, bukan tiap bid) dan `auction.closed` (kedua sisi, kalau
- * produknya ada di watchlist masing-masing). `auction.started` SENGAJA
+ * Event yang di-global-kan: `auction.bid_placed` — seller SELALU dinotif
+ * setiap ada bid baru di listingnya; buyer (peserta) JUGA SELALU dinotif
+ * tiap ada bid baru di lelang yang diikuti ("Ada tawaran baru"), disamakan
+ * dengan perilaku halaman detail produk (`use-auction-realtime.ts`) yang
+ * menampilkan itu ke SIAPA SAJA yang sedang buka halaman itu — sebelumnya
+ * versi global ini cuma nge-notif kalau ter-outbid, jadi peserta yang lagi
+ * di halaman lain kehilangan update bid biasa (revisi 4 September 2026).
+ * Kalau event yang sama BERSAMAAN bikin buyer ter-outbid, toast warning
+ * yang lebih tegas dipakai SEBAGAI GANTI toast info biasa (satu event =
+ * satu toast, bukan dobel). `auction.closed` juga di-global-kan (kedua
+ * sisi, kalau produknya ada di watchlist masing-masing). `auction.started` SENGAJA
  * TIDAK di-global-kan — nilainya cuma relevan selagi user benar-benar ada
  * di halaman detail produk itu (sudah dihandle `use-auction-realtime.ts`).
  */
@@ -126,12 +133,27 @@ export function AuctionNotificationWatcher({ marketId }: AuctionNotificationWatc
         });
       }
 
+      // Peserta ("Lelang yang Diikuti") — SELALU dapat notifikasi tiap ada
+      // bid baru di lelang yang mereka ikuti (samakan dengan perilaku di
+      // halaman detail produk, `use-auction-realtime.ts`, yang menampilkan
+      // "Ada tawaran baru" ke SEMUA orang yang sedang buka halaman itu,
+      // tanpa terkecuali "hanya yang ter-outbid" — sebelumnya versi global
+      // ini cuma nge-notif kalau ter-outbid, jadi peserta yang lagi di
+      // halaman lain kehilangan update biasa). Kalau event ini SEKALIGUS
+      // bikin dia ter-outbid, tampilkan versi warning yang lebih tegas
+      // (gantikan info biasa, bukan dobel toast untuk event yang sama).
       const bidName = myBidsRef.current.get(productId);
-      const gotOutbid = bidName != null && previousHighestBidder === user.userId && newHighestBidder !== user.userId;
-      if (gotOutbid) {
-        notify.warning(`Anda ter-outbid di lelang "${bidName}"!`, {
-          description: 'Ada peserta lain yang mengajukan tawaran lebih tinggi.',
-        });
+      if (bidName) {
+        const gotOutbid = previousHighestBidder === user.userId && newHighestBidder !== user.userId;
+        if (gotOutbid) {
+          notify.warning(`Anda ter-outbid di lelang "${bidName}"!`, {
+            description: 'Ada peserta lain yang mengajukan tawaran lebih tinggi.',
+          });
+        } else {
+          notify.info(`Ada tawaran baru di lelang "${bidName}"`, {
+            description: currentHighestBid != null ? `Tawaran tertinggi sekarang ${currencyFormatter.format(currentHighestBid)}` : undefined,
+          });
+        }
       }
     });
 

@@ -3,9 +3,8 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 
-import { FulfillmentProgress } from '@/components/fulfillment-progress';
 import { ApiError, apiClient } from '@/lib/proxy-client';
-import type { Product, ProductFulfillment, ProductModeJual } from '@/lib/types';
+import type { Product, ProductFulfillment, ProductModeJual, ProductStatus } from '@/lib/types';
 import { useTokoSaya } from './toko-saya-context';
 import { PageTitle } from './page-title';
 import { ProductFormModal } from './product-form-modal';
@@ -30,6 +29,11 @@ const STATUS_BADGE_CLASS: Record<Product['status'], string> = {
   expired: 'bg-[var(--brand-error)] text-white',
 };
 
+/** Urutan tab status — draft (perlu di-publish) & published (aktif) duluan, baru status "selesai" (sold/expired). */
+const STATUS_ORDER: ProductStatus[] = ['draft', 'published', 'sold', 'expired'];
+
+type StatusTab = 'ALL' | ProductStatus;
+
 interface ModeListingManagerProps {
   modeJual: ProductModeJual;
   title: string;
@@ -46,6 +50,15 @@ interface ModeListingManagerProps {
  * `modeJual` DIKUNCI saat tambah produk baru (`ProductFormModal`
  * `defaultModeJual`) — supaya produk yang baru dibuat dari sini pasti
  * muncul di tab yang sama, bukan nyasar ke tab mode lain.
+ *
+ * Kartu dikelompokkan PER STATUS lewat TAB (draft/published/sold/expired +
+ * "Semua", pola sama filter tab `ModePurchasesList`) — revisi dari versi
+ * sebelumnya yang menumpuk semua grup status sekaligus (section stack),
+ * sekarang cuma satu grid aktif per tab supaya lebih ringkas dipindai.
+ * `FulfillmentProgress` TIDAK LAGI expand inline di kartu —
+ * dipindah ke halaman detail tersendiri (`toko-saya/listing/[product_id]/`,
+ * link "Detail" di tiap kartu) supaya lebih lega, bukan dijejalkan ke grid
+ * card yang sempit.
  */
 export function ModeListingManager({ modeJual, title }: ModeListingManagerProps) {
   const { marketId, marketSlug, seller } = useTokoSaya();
@@ -63,7 +76,7 @@ export function ModeListingManager({ modeJual, title }: ModeListingManagerProps)
 
   const [busyId, setBusyId] = useState<string | null>(null);
   const [rowError, setRowError] = useState<Record<string, string>>({});
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [activeStatusTab, setActiveStatusTab] = useState<StatusTab>('ALL');
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -205,6 +218,16 @@ export function ModeListingManager({ modeJual, title }: ModeListingManagerProps)
   const modeProducts = products.filter((p) => p.mode_jual === modeJual);
   const fulfillmentByProduct = new Map(fulfillments.filter((f) => f.mode_jual === modeJual).map((f) => [f.product_id, f]));
 
+  const statusTabs: { key: StatusTab; label: string; count: number }[] = [
+    { key: 'ALL', label: 'Semua', count: modeProducts.length },
+    ...STATUS_ORDER.map((status) => ({
+      key: status,
+      label: STATUS_LABEL[status],
+      count: modeProducts.filter((p) => p.status === status).length,
+    })),
+  ];
+  const visibleProducts = activeStatusTab === 'ALL' ? modeProducts : modeProducts.filter((p) => p.status === activeStatusTab);
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-4">
@@ -227,134 +250,157 @@ export function ModeListingManager({ modeJual, title }: ModeListingManagerProps)
           Belum ada produk. Klik &ldquo;+ Tambah Produk&rdquo; untuk mulai berjualan.
         </p>
       ) : (
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-          {modeProducts.map((product) => {
-            const cover = product.images?.[0] ?? null;
-            const isDraft = product.status === 'draft';
-            const fulfillment = fulfillmentByProduct.get(product.id);
-            const isExpanded = expandedId === product.id;
-            return (
-              <div
-                key={product.id}
-                className="flex flex-col overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm"
+        <div className="space-y-4">
+          <div className="flex flex-wrap gap-2 border-b border-zinc-200 pb-3">
+            {statusTabs.map((tab) => (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => setActiveStatusTab(tab.key)}
+                className={`rounded-full px-3 py-1.5 text-sm font-medium transition ${
+                  activeStatusTab === tab.key
+                    ? 'bg-[var(--brand-primary)] text-white'
+                    : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
+                }`}
               >
-                <div className="aspect-square w-full bg-zinc-100">
-                  {cover ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={cover} alt={product.name} className="h-full w-full object-cover" />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center text-xs text-zinc-400">
-                      Tidak ada gambar
-                    </div>
-                  )}
-                </div>
+                {tab.label} ({tab.count})
+              </button>
+            ))}
+          </div>
 
-                <div className="flex flex-1 flex-col gap-1 p-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <h3 className="line-clamp-2 text-sm font-medium text-zinc-900">{product.name}</h3>
-                    <span
-                      className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${STATUS_BADGE_CLASS[product.status]}`}
+          {visibleProducts.length === 0 ? (
+            <p className="rounded-xl border border-dashed border-zinc-300 p-8 text-center text-sm text-zinc-500">
+              Tidak ada produk di status ini.
+            </p>
+          ) : (
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+                {visibleProducts.map((product) => {
+                  const cover = product.images?.[0] ?? null;
+                  const isDraft = product.status === 'draft';
+                  const hasFulfillment = fulfillmentByProduct.has(product.id);
+                  const detailHref = `/${marketSlug}/toko-saya/listing/${product.id}`;
+                  return (
+                    <div
+                      key={product.id}
+                      className="flex flex-col overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm"
                     >
-                      {STATUS_LABEL[product.status]}
-                    </span>
-                  </div>
-                  <p className="text-sm font-semibold text-[var(--brand-primary)]">
-                    {currencyFormatter.format(product.price)}
-                  </p>
+                      <Link href={detailHref} className="aspect-square w-full bg-zinc-100">
+                        {cover ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={cover} alt={product.name} className="h-full w-full object-cover" />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center text-xs text-zinc-400">
+                            Tidak ada gambar
+                          </div>
+                        )}
+                      </Link>
 
-                  {rowError[product.id] && (
-                    <p className="text-xs text-[var(--brand-error)]">{rowError[product.id]}</p>
-                  )}
+                      <div className="flex flex-1 flex-col gap-1 p-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <Link href={detailHref} className="line-clamp-2 text-sm font-medium text-zinc-900 hover:underline">
+                            {product.name}
+                          </Link>
+                          <span
+                            className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${STATUS_BADGE_CLASS[product.status]}`}
+                          >
+                            {STATUS_LABEL[product.status]}
+                          </span>
+                        </div>
+                        <p className="text-sm font-semibold text-[var(--brand-primary)]">
+                          {currencyFormatter.format(product.price)}
+                        </p>
+                        {hasFulfillment && (
+                          <span className="w-fit rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-medium text-blue-700">
+                            Progress pengiriman tersedia
+                          </span>
+                        )}
 
-                  <div className="mt-auto flex flex-wrap gap-1.5 pt-2">
-                    {isDraft && (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => openEditModal(product)}
-                          disabled={busyId === product.id}
-                          className="rounded-md border border-zinc-300 px-2.5 py-1 text-xs font-medium text-zinc-700 transition hover:bg-zinc-50 disabled:opacity-50"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handlePublish(product.id)}
-                          disabled={busyId === product.id}
-                          className="rounded-md bg-[var(--brand-primary)] px-2.5 py-1 text-xs font-medium text-white transition hover:bg-[var(--brand-primary-hover)] disabled:opacity-50"
-                        >
-                          {busyId === product.id ? '…' : 'Publish'}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDelete(product.id)}
-                          disabled={busyId === product.id}
-                          className="rounded-md border border-[var(--brand-error)] px-2.5 py-1 text-xs font-medium text-[var(--brand-error)] transition hover:bg-red-50 disabled:opacity-50"
-                        >
-                          Hapus
-                        </button>
-                      </>
-                    )}
-                    {product.status === 'published' && (
-                      <>
-                        <Link
-                          href={`/${marketSlug}/products/${product.slug}?view=owner`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="rounded-md border border-zinc-300 px-2.5 py-1 text-xs font-medium text-zinc-700 transition hover:bg-zinc-50"
-                        >
-                          Lihat Detail
-                        </Link>
-                        <button
-                          type="button"
-                          onClick={() => handleUnpublish(product.id)}
-                          disabled={busyId === product.id}
-                          className="rounded-md border border-amber-300 px-2.5 py-1 text-xs font-medium text-amber-700 transition hover:bg-amber-50 disabled:opacity-50"
-                        >
-                          {busyId === product.id ? '…' : 'Turunkan'}
-                        </button>
-                      </>
-                    )}
-                    {product.status === 'expired' && (
-                      <button
-                        type="button"
-                        onClick={() => handleReList(product.id)}
-                        disabled={busyId === product.id}
-                        title="Bikin draft baru hasil copy produk ini untuk dilelang/dijual ulang"
-                        className="rounded-md bg-[var(--brand-primary)] px-2.5 py-1 text-xs font-medium text-white transition hover:bg-[var(--brand-primary-hover)] disabled:opacity-50"
-                      >
-                        {busyId === product.id ? '…' : 'Lelang Ulang'}
-                      </button>
-                    )}
-                    {fulfillment && (
-                      <button
-                        type="button"
-                        onClick={() => setExpandedId(isExpanded ? null : product.id)}
-                        className="rounded-md border border-zinc-300 px-2.5 py-1 text-xs font-medium text-zinc-700 transition hover:bg-zinc-50"
-                      >
-                        {isExpanded ? 'Sembunyikan Progress' : 'Lihat Progress Pengiriman'}
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => handleDuplicate(product.id)}
-                      disabled={busyId === product.id}
-                      title="Duplikat produk ini jadi draft baru"
-                      className="rounded-md border border-zinc-300 px-2.5 py-1 text-xs font-medium text-zinc-700 transition hover:bg-zinc-50 disabled:opacity-50"
-                    >
-                      Duplikat
-                    </button>
-                  </div>
+                        {rowError[product.id] && (
+                          <p className="text-xs text-[var(--brand-error)]">{rowError[product.id]}</p>
+                        )}
 
-                  {fulfillment && isExpanded && (
-                    <div className="mt-2 border-t border-zinc-100 pt-2">
-                      <FulfillmentProgress marketId={marketId} productId={product.id} role="seller" />
+                        <div className="mt-auto flex flex-wrap gap-1.5 pt-2">
+                          {isDraft && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => openEditModal(product)}
+                                disabled={busyId === product.id}
+                                className="rounded-md border border-zinc-300 px-2.5 py-1 text-xs font-medium text-zinc-700 transition hover:bg-zinc-50 disabled:opacity-50"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handlePublish(product.id)}
+                                disabled={busyId === product.id}
+                                className="rounded-md bg-[var(--brand-primary)] px-2.5 py-1 text-xs font-medium text-white transition hover:bg-[var(--brand-primary-hover)] disabled:opacity-50"
+                              >
+                                {busyId === product.id ? '…' : 'Publish'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDelete(product.id)}
+                                disabled={busyId === product.id}
+                                className="rounded-md border border-[var(--brand-error)] px-2.5 py-1 text-xs font-medium text-[var(--brand-error)] transition hover:bg-red-50 disabled:opacity-50"
+                              >
+                                Hapus
+                              </button>
+                            </>
+                          )}
+                          {product.status === 'published' && (
+                            <>
+                              <Link
+                                href={`/${marketSlug}/products/${product.slug}?view=owner`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="rounded-md border border-zinc-300 px-2.5 py-1 text-xs font-medium text-zinc-700 transition hover:bg-zinc-50"
+                              >
+                                Lihat Publik
+                              </Link>
+                              <button
+                                type="button"
+                                onClick={() => handleUnpublish(product.id)}
+                                disabled={busyId === product.id}
+                                className="rounded-md border border-amber-300 px-2.5 py-1 text-xs font-medium text-amber-700 transition hover:bg-amber-50 disabled:opacity-50"
+                              >
+                                {busyId === product.id ? '…' : 'Turunkan'}
+                              </button>
+                            </>
+                          )}
+                          {product.status === 'expired' && (
+                            <button
+                              type="button"
+                              onClick={() => handleReList(product.id)}
+                              disabled={busyId === product.id}
+                              title="Bikin draft baru hasil copy produk ini untuk dilelang/dijual ulang"
+                              className="rounded-md bg-[var(--brand-primary)] px-2.5 py-1 text-xs font-medium text-white transition hover:bg-[var(--brand-primary-hover)] disabled:opacity-50"
+                            >
+                              {busyId === product.id ? '…' : 'Lelang Ulang'}
+                            </button>
+                          )}
+                          <Link
+                            href={detailHref}
+                            className="rounded-md border border-zinc-300 px-2.5 py-1 text-xs font-medium text-zinc-700 transition hover:bg-zinc-50"
+                          >
+                            Detail
+                          </Link>
+                          <button
+                            type="button"
+                            onClick={() => handleDuplicate(product.id)}
+                            disabled={busyId === product.id}
+                            title="Duplikat produk ini jadi draft baru"
+                            className="rounded-md border border-zinc-300 px-2.5 py-1 text-xs font-medium text-zinc-700 transition hover:bg-zinc-50 disabled:opacity-50"
+                          >
+                            Duplikat
+                          </button>
+                        </div>
+                      </div>
                     </div>
-                  )}
-                </div>
+                  );
+                })}
               </div>
-            );
-          })}
+          )}
         </div>
       )}
 

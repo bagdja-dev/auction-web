@@ -170,31 +170,49 @@ export function ModePurchasesList({ modeJual, title }: ModePurchasesListProps) {
               Tidak ada item di kategori ini.
             </p>
           ) : (
-            <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
               {filteredRows.map((row) => {
                 const cta = ctaFor(row, marketSlug);
                 return (
                   <div
                     key={row.product_id}
-                    className="flex flex-col gap-3 rounded-xl border border-zinc-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between"
+                    className="flex flex-col overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm"
                   >
-                    <div className="space-y-1">
-                      <p className="text-sm font-medium text-zinc-900">{row.product_name}</p>
+                    <div className="aspect-square w-full bg-zinc-100">
+                      {row.product_image ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={row.product_image} alt={row.product_name} className="h-full w-full object-cover" />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center text-xs text-zinc-400">
+                          Tidak ada gambar
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex flex-1 flex-col gap-1 p-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <h3 className="line-clamp-2 text-sm font-medium text-zinc-900">{row.product_name}</h3>
+                      </div>
                       <span
-                        className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-medium ${CATEGORY_BADGE_CLASS[row.category]}`}
+                        className={`inline-block w-fit rounded-full px-2 py-0.5 text-[11px] font-medium ${CATEGORY_BADGE_CLASS[row.category]}`}
                       >
                         {CATEGORY_LABEL[row.category]}
                       </span>
-                      <p className="text-sm text-zinc-600">{currencyFormatter.format(row.amount)}</p>
+                      <p className="text-sm font-semibold text-[var(--brand-primary)]">
+                        {currencyFormatter.format(row.amount)}
+                      </p>
+
+                      {cta && (
+                        <div className="mt-auto pt-2">
+                          <Link
+                            href={cta.href}
+                            className="block w-full rounded-md bg-[var(--brand-primary)] px-2.5 py-1.5 text-center text-xs font-medium text-white transition hover:bg-[var(--brand-primary-hover)]"
+                          >
+                            {cta.label}
+                          </Link>
+                        </div>
+                      )}
                     </div>
-                    {cta && (
-                      <Link
-                        href={cta.href}
-                        className="shrink-0 rounded-lg bg-[var(--brand-primary)] px-4 py-2 text-center text-sm font-medium text-white transition hover:bg-[var(--brand-primary-hover)]"
-                      >
-                        {cta.label}
-                      </Link>
-                    )}
                   </div>
                 );
               })}
