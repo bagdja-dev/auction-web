@@ -1,9 +1,9 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { io, type Socket } from 'socket.io-client';
 
 import { notify, playVictoryFanfare } from '@/lib/notify';
+import { useRealtime } from '@/components/realtime-provider';
 
 const currencyFormatter = new Intl.NumberFormat('id-ID', {
   style: 'currency',
@@ -12,25 +12,24 @@ const currencyFormatter = new Intl.NumberFormat('id-ID', {
 });
 
 /**
- * Subscriber WebSocket Fase 3.B (`execution-plan.md`) — pola PERSIS
- * `core/bagdja-console/src/components/NotificationDropdown.tsx`, cuma beda
- * kriteria filter (`product_id`, bukan `userId`) dan sumber token (endpoint
- * publik `/api/realtime/ws-token`, bukan JWT buyer — halaman lelang boleh
- * ditonton tanpa login).
- *
- * Channel `auction-market.*` memuat SEMUA bid dari SEMUA produk/Market di
- * bawah app ini (client auto-join semua channel di klaim `channels[]` JWT
- * saat connect, bukan channel per-produk) — makanya filter `product_id`
- * WAJIB dilakukan di sini, server tidak memfilter per-produk.
+ * Subscriber event lelang untuk SATU produk — sejak restrukturisasi
+ * "koneksi realtime global" (dipicu kebutuhan fitur outbid lintas halaman +
+ * pondasi fitur realtime lain ke depan seperti chat), hook ini TIDAK LAGI
+ * bikin koneksi Socket.IO sendiri. Koneksinya SATU untuk seluruh sesi
+ * (`RealtimeProvider`, dipasang di `app/[market_slug]/layout.tsx`) — di
+ * sini cuma `subscribe()` ke context itu, filter `product_id` tetap di sini
+ * (server broadcast semua produk lewat channel yang sama, lihat catatan di
+ * `realtime-provider.tsx`). Signature tidak berubah dari versi lama supaya
+ * pemanggil (`auction-panel.tsx`) tidak perlu ikut diubah.
  */
 export function useAuctionRealtime(
   productId: string,
   /**
    * ID user yang sedang login (dari `useAuth()`, `null` kalau belum
-   * login/belum sempat kebaca cookie) — polish 31 Agustus 2026, dipakai
-   * SATU-SATUNYA tujuan: bedakan suara `auction.closed` antara pemenang
-   * (fanfare) vs penonton lain (chime biasa). Bukan dipakai buat filter
-   * event (filter tetap `product_id`, sama semua orang).
+   * login/belum sempat kebaca cookie) — SATU-SATUNYA tujuan: bedakan suara
+   * `auction.closed` antara pemenang (fanfare) vs penonton lain (chime
+   * biasa). Bukan dipakai buat filter event (filter tetap `product_id`,
+   * sama semua orang).
    */
   currentUserId: string | null,
   onBidPlaced: (data: {
@@ -43,20 +42,18 @@ export function useAuctionRealtime(
     final_amount: number | null;
   }) => void,
   /**
-   * Dipanggil saat `auction.started` diterima (polish 31 Agustus 2026) —
-   * peserta yang standby di halaman detail SEBELUM `auction_start_at`
-   * sebelumnya cuma mengandalkan tick lokal 1 detik (`setInterval` di
-   * `BiddingSection`) buat pindah ke mode bid, yang bisa telat kalau tab
-   * browser di-throttle background. Callback ini opsional (dipanggil TANPA
-   * argumen) — cukup buat konsumen memicu ulang perhitungan `hasStarted`
-   * miliknya sendiri (mis. `setNowMs(Date.now())`), bukan bawa data baru.
+   * Dipanggil saat `auction.started` diterima — peserta yang standby di
+   * halaman detail SEBELUM `auction_start_at` sebelumnya cuma mengandalkan
+   * tick lokal 1 detik. Callback ini opsional (dipanggil TANPA argumen) —
+   * cukup buat konsumen memicu ulang perhitungan lokalnya sendiri.
    */
   onAuctionStarted?: () => void,
 ) {
-  const socketRef = useRef<Socket | null>(null);
+  const { subscribe } = useRealtime();
+
   // Callback bisa berubah tiap render (closure ke state terbaru) — simpan di
-  // ref supaya effect connect/disconnect di bawah tidak perlu re-run tiap
-  // kali callback berubah identitas.
+  // ref supaya effect subscribe/unsubscribe di bawah tidak perlu re-run
+  // tiap kali callback berubah identitas.
   const onBidPlacedRef = useRef(onBidPlaced);
   const onAuctionClosedRef = useRef(onAuctionClosed);
   const onAuctionStartedRef = useRef(onAuctionStarted);
@@ -67,96 +64,50 @@ export function useAuctionRealtime(
   currentUserIdRef.current = currentUserId;
 
   useEffect(() => {
-    let cancelled = false;
-
-    async function connect() {
-      let token: string;
-      try {
-        const res = await fetch('/api/realtime/ws-token');
-        if (!res.ok) throw new Error(`ws-token ${res.status}`);
-        const data = (await res.json()) as { access_token: string };
-        token = data.access_token;
-      } catch (err) {
-        // Best-effort — polling fallback di BiddingSection tetap jalan
-        // kalau realtime gagal connect (mis. Event Hub down).
-        console.error('[useAuctionRealtime] gagal ambil ws-token:', err);
-        return;
-      }
-      if (cancelled) return;
-
-      const eventServiceUrl = process.env.NEXT_PUBLIC_EVENT_API || 'http://localhost:4085';
-      // WAJIB `/events` (namespace socket.io `EventsGateway` di
-      // bagdja-event-service, lihat `@WebSocketGateway({ namespace: 'events' })`)
-      // — connect ke root TANPA ini masuk namespace default `/` yang tidak
-      // punya handler apa pun terdaftar: socket tampak "connected" (tidak
-      // error), tapi `handleConnection()` (auth+join channel) di sisi
-      // server TIDAK PERNAH jalan, jadi tidak pernah dapat event apa pun.
-      // Diverifikasi manual 31 Agustus 2026 — konek ke root: tidak pernah
-      // dapat 'authenticated'; konek ke `/events`: dapat 'authenticated'
-      // + channels terisi benar. Bug yang sama kemungkinan juga ada di
-      // `core/bagdja-console/src/components/NotificationDropdown.tsx`
-      // (pola sumbernya, sama-sama tanpa `/events`) — di luar scope
-      // perbaikan ini, belum dikonfirmasi/disentuh.
-      const socket = io(`${eventServiceUrl}/events`, {
-        auth: { token },
-        transports: ['websocket'],
+    const unsubBidPlaced = subscribe('auction.bid_placed', (eventData) => {
+      if (eventData.product_id !== productId) return;
+      onBidPlacedRef.current({
+        current_highest_bid: eventData.current_highest_bid as number | null,
+        highest_bidder_id: eventData.highest_bidder_id as string | null,
       });
-
-      socket.on('event', (event) => {
-        const eventName = event?.data?.eventName;
-        const eventData = event?.data?.data;
-        if (!eventData || eventData.product_id !== productId) return;
-
-        if (eventName === 'auction.bid_placed') {
-          onBidPlacedRef.current({
-            current_highest_bid: eventData.current_highest_bid,
-            highest_bidder_id: eventData.highest_bidder_id,
-          });
-          notify.info('Ada tawaran baru', {
-            description:
-              eventData.current_highest_bid != null
-                ? `Tawaran tertinggi sekarang ${currencyFormatter.format(eventData.current_highest_bid)}`
-                : undefined,
-          });
-        } else if (eventName === 'auction.closed') {
-          onAuctionClosedRef.current({
-            status: eventData.status,
-            winner_user_id: eventData.winner_user_id ?? null,
-            final_amount: eventData.final_amount ?? null,
-          });
-          // Pemenang dapat fanfare (bukan chime biasa) — dicek di sini
-          // (bukan cuma di BiddingSection) supaya `notify.success()` di
-          // bawah bisa senyapkan chime-nya (`sound:false`), mencegah dua
-          // suara tumpang tindih (chime + fanfare) tepat di momen yang sama.
-          const isWinner =
-            eventData.status === 'sold' &&
-            eventData.winner_user_id != null &&
-            eventData.winner_user_id === currentUserIdRef.current;
-          if (isWinner) playVictoryFanfare();
-          notify.success(eventData.status === 'sold' ? 'Lelang berakhir — Terjual' : 'Lelang berakhir — Tidak ada penawar', {
-            sound: !isWinner,
-            description:
-              eventData.status === 'sold' && eventData.final_amount != null
-                ? `Harga final ${currencyFormatter.format(eventData.final_amount)}`
-                : undefined,
-          });
-        } else if (eventName === 'auction.started') {
-          onAuctionStartedRef.current?.();
-          notify.success('Lelang telah dimulai!', {
-            description: 'Anda sekarang bisa mengajukan tawaran.',
-          });
-        }
+      notify.info('Ada tawaran baru', {
+        description:
+          eventData.current_highest_bid != null
+            ? `Tawaran tertinggi sekarang ${currencyFormatter.format(eventData.current_highest_bid as number)}`
+            : undefined,
       });
+    });
 
-      socketRef.current = socket;
-    }
+    const unsubClosed = subscribe('auction.closed', (eventData) => {
+      if (eventData.product_id !== productId) return;
+      const status = eventData.status as 'sold' | 'expired';
+      const winnerUserId = (eventData.winner_user_id as string | null) ?? null;
+      const finalAmount = (eventData.final_amount as number | null) ?? null;
+      onAuctionClosedRef.current({ status, winner_user_id: winnerUserId, final_amount: finalAmount });
 
-    connect();
+      // Pemenang dapat fanfare (bukan chime biasa) — `notify.success()` di
+      // bawah senyapkan chime-nya (`sound:false`) supaya tidak tumpang
+      // tindih dgn fanfare.
+      const isWinner = status === 'sold' && winnerUserId != null && winnerUserId === currentUserIdRef.current;
+      if (isWinner) playVictoryFanfare();
+      notify.success(status === 'sold' ? 'Lelang berakhir — Terjual' : 'Lelang berakhir — Tidak ada penawar', {
+        sound: !isWinner,
+        description: status === 'sold' && finalAmount != null ? `Harga final ${currencyFormatter.format(finalAmount)}` : undefined,
+      });
+    });
+
+    const unsubStarted = subscribe('auction.started', (eventData) => {
+      if (eventData.product_id !== productId) return;
+      onAuctionStartedRef.current?.();
+      notify.success('Lelang telah dimulai!', {
+        description: 'Anda sekarang bisa mengajukan tawaran.',
+      });
+    });
 
     return () => {
-      cancelled = true;
-      socketRef.current?.disconnect();
-      socketRef.current = null;
+      unsubBidPlaced();
+      unsubClosed();
+      unsubStarted();
     };
-  }, [productId]);
+  }, [productId, subscribe]);
 }

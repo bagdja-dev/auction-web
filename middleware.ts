@@ -29,8 +29,10 @@ const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1']);
 const SUBDOMAIN_PATTERN = new RegExp(`^([a-z0-9-]+)\\.${PLATFORM_HOST.replace(/\./g, '\\.')}$`);
 
 // ─── Route protected (wajib login seller/buyer) ─────────────────────────
-// Hanya `/{slug}/toko-saya` di Fase 1 ini (cart/checkout/orders/profile
-// belum ada — checkout Fase 2, bidding Fase 3).
+// Seluruh halaman "Dashboard" (Produk, Pesanan, Pembelian Saya, Pengaturan,
+// termasuk status Order/Settlement pasca-pembayaran) dibungkus di
+// `/{slug}/toko-saya/*` — satu pattern ini cukup untuk melindungi semuanya,
+// tidak perlu ditambah per fitur baru selama tetap dinest di sini.
 const PROTECTED_PATH_PATTERN = /^\/([a-z0-9-]+)\/toko-saya(\/|$)/;
 
 function shouldProtect(pathname: string): boolean {

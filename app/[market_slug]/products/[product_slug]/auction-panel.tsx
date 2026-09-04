@@ -14,6 +14,8 @@ import type {
   AuctionBid,
   AuctionRegistration,
   AuctionRegistrationMeResponse,
+  AuctionSettlement,
+  AuctionSettlementMeResponse,
   DepositPreview,
   PlaceBidResponse,
   RegisterAuctionPayload,
@@ -31,6 +33,8 @@ export interface AuctionPanelProps {
   auctionEndAt: string | null;
   productStatus: ProductStatus;
   registrationDeadlineMinutes: number | null;
+  /** User id pemenang lelang (Fase 4) — dipakai deteksi "Anda menang" persisten (bukan cuma dari event realtime), lihat `BiddingSection`. */
+  highestBidderId: string | null;
   /** Mode lihat-saja untuk pemilik produk (dibuka dari "Toko Saya" lewat `?view=owner`) — lihat sesi lelang tanpa bisa daftar/menawar. */
   readOnly?: boolean;
 }
@@ -121,6 +125,7 @@ export function AuctionPanel({
   auctionEndAt,
   productStatus,
   registrationDeadlineMinutes,
+  highestBidderId,
   readOnly = false,
 }: AuctionPanelProps) {
   const { isLoggedIn, loading: authLoading } = useAuth();
@@ -169,6 +174,7 @@ export function AuctionPanel({
           auctionStartAt={auctionStartAt}
           auctionEndAt={auctionEndAt}
           initialProductStatus={productStatus}
+          highestBidderId={highestBidderId}
           readOnly
         />
       </PanelShell>
@@ -251,6 +257,7 @@ export function AuctionPanel({
         auctionStartAt={auctionStartAt}
         auctionEndAt={auctionEndAt}
         initialProductStatus={productStatus}
+        highestBidderId={highestBidderId}
       />
     </PanelShell>
   );
@@ -520,6 +527,7 @@ function BiddingSection({
   auctionStartAt,
   auctionEndAt,
   initialProductStatus,
+  highestBidderId,
   readOnly = false,
 }: {
   marketId: string;
@@ -532,6 +540,7 @@ function BiddingSection({
   auctionStartAt: string | null;
   auctionEndAt: string | null;
   initialProductStatus: ProductStatus;
+  highestBidderId: string | null;
   readOnly?: boolean;
 }) {
   const { user } = useAuth();
@@ -614,6 +623,61 @@ function BiddingSection({
     }, 300);
     return () => clearTimeout(timer);
   }, [isWinner]);
+
+  // Fase 4 — "Anda menang" PERSISTEN, dihitung dari `highestBidderId` (prop,
+  // sumber server) + `productStatus` LOKAL (state, sudah di-update
+  // polling/realtime) — BUKAN dari `winnerModal` (itu murni celebrasi
+  // realtime, cuma terisi kalau user sedang di halaman TEPAT saat lelang
+  // ditutup). Ini yang membuat buyer yang balik lagi ke halaman produk
+  // nanti (tanpa sempat menerima event) tetap lihat CTA pelunasan.
+  const isWinnerPersistent =
+    !readOnly && productStatus === 'sold' && user != null && highestBidderId === user.userId;
+
+  const [settlement, setSettlement] = useState<AuctionSettlement | null>(null);
+  const [settlementChecked, setSettlementChecked] = useState(false);
+  const [settlementActionLoading, setSettlementActionLoading] = useState(false);
+  const [settlementError, setSettlementError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isWinnerPersistent) return;
+    let cancelled = false;
+    apiClient<AuctionSettlementMeResponse>(`/api/markets/${marketId}/products/${productId}/settlement/me`)
+      .then((data) => {
+        if (!cancelled) setSettlement(data.settlement);
+      })
+      .catch(() => {
+        // Non-kritikal — buyer masih bisa klik "Tebus Sekarang" langsung, itu akan gagal jelas kalau memang ada masalah.
+      })
+      .finally(() => {
+        if (!cancelled) setSettlementChecked(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isWinnerPersistent, marketId, productId]);
+
+  /** Dipakai baik tombol di modal celebrasi (`winnerModal`) maupun panel persisten di bawah — satu sumber logic. */
+  async function handleTebusSekarang() {
+    setSettlementActionLoading(true);
+    setSettlementError(null);
+    try {
+      const data = await apiClient<AuctionSettlement>(
+        `/api/markets/${marketId}/products/${productId}/settlement`,
+        { method: 'POST' },
+      );
+      if (data.checkout_url) {
+        window.location.href = data.checkout_url;
+        return;
+      }
+      // Edge case total_amount<=0 — sudah HELD langsung tanpa escrow.
+      setSettlement(data);
+    } catch (err) {
+      setSettlementError(err instanceof ApiError ? err.message : 'Gagal memproses pelunasan.');
+    } finally {
+      setSettlementActionLoading(false);
+    }
+  }
 
   // Polling harga tertinggi + status produk (fetch publik, tanpa proxy) — STOP begitu lelang berakhir.
   useEffect(() => {
@@ -722,16 +786,51 @@ function BiddingSection({
       )}
 
       {hasEnded ? (
-        <p className="text-sm font-medium text-zinc-700">
-          {/* Dicek dari `highestBid` (bukan `productStatus`) supaya tetap
-              benar meski scheduler penutup lelang belum sempat ubah status
-              ke sold/expired (mis. Redis/BullMQ belum jalan) — harga
-              pemenang harus langsung tampil begitu waktu lelang berakhir,
-              tidak menunggu job async. */}
-          {highestBid != null
-            ? `Lelang telah berakhir — dimenangkan dengan tawaran ${currencyFormatter.format(highestBid)}.`
-            : 'Lelang telah berakhir tanpa penawar.'}
-        </p>
+        isWinnerPersistent ? (
+          // Panel PERSISTEN (Fase 4) — beda dari modal `winnerModal` yang
+          // cuma muncul sekali saat event realtime diterima. Ini yang
+          // membuat buyer yang balik lagi ke halaman ini nanti (browser
+          // ditutup, reload, dst.) tetap lihat CTA pelunasan.
+          <div className="space-y-3 rounded-lg border border-green-200 bg-green-50 p-4">
+            <p className="text-sm font-medium text-green-800">Selamat, Anda memenangkan lelang ini!</p>
+            {highestBid != null && (
+              <p className="text-xl font-bold text-[var(--brand-primary)]">{currencyFormatter.format(highestBid)}</p>
+            )}
+            {!settlementChecked ? (
+              <p className="text-sm text-zinc-500">Memeriksa status pelunasan…</p>
+            ) : settlement?.status === 'HELD' ? (
+              <p className="text-sm font-medium text-green-700">Pelunasan berhasil — terima kasih!</p>
+            ) : settlement?.checkout_url ? (
+              <a
+                href={settlement.checkout_url}
+                className="block w-full rounded-lg bg-[var(--brand-primary)] px-4 py-2.5 text-center text-sm font-medium text-white transition hover:bg-[var(--brand-primary-hover)]"
+              >
+                Lanjutkan Pembayaran
+              </a>
+            ) : (
+              <button
+                type="button"
+                onClick={handleTebusSekarang}
+                disabled={settlementActionLoading}
+                className="w-full rounded-lg bg-[var(--brand-primary)] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-[var(--brand-primary-hover)] disabled:opacity-50"
+              >
+                {settlementActionLoading ? 'Memproses…' : 'Tebus Sekarang'}
+              </button>
+            )}
+            {settlementError && <p className="text-sm text-[var(--brand-error)]">{settlementError}</p>}
+          </div>
+        ) : (
+          <p className="text-sm font-medium text-zinc-700">
+            {/* Dicek dari `highestBid` (bukan `productStatus`) supaya tetap
+                benar meski scheduler penutup lelang belum sempat ubah status
+                ke sold/expired (mis. Redis/BullMQ belum jalan) — harga
+                pemenang harus langsung tampil begitu waktu lelang berakhir,
+                tidak menunggu job async. */}
+            {highestBid != null
+              ? `Lelang telah berakhir — dimenangkan dengan tawaran ${currencyFormatter.format(highestBid)}.`
+              : 'Lelang telah berakhir tanpa penawar.'}
+          </p>
+        )
       ) : readOnly ? null : (
         <form onSubmit={handleSubmitBid} className="space-y-2">
           <label className="block text-sm font-medium text-zinc-700">
@@ -823,12 +922,11 @@ function BiddingSection({
               {isWinner && (
                 <button
                   type="button"
-                  // Belum ada logic pelunasan (Fase 4 execution-plan.md,
-                  // belum dikerjakan) — tombol sengaja tanpa onClick dulu,
-                  // ditambahkan action-nya begitu Fase 4 mulai dikerjakan.
-                  className="w-full rounded-lg bg-[var(--brand-primary)] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-[var(--brand-primary-hover)]"
+                  onClick={handleTebusSekarang}
+                  disabled={settlementActionLoading}
+                  className="w-full rounded-lg bg-[var(--brand-primary)] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-[var(--brand-primary-hover)] disabled:opacity-50"
                 >
-                  Tebus Sekarang
+                  {settlementActionLoading ? 'Memproses…' : 'Tebus Sekarang'}
                 </button>
               )}
               <button

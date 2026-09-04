@@ -37,6 +37,8 @@ export interface ProductPublic {
   auction_end_at: string | null;
   /** Tawaran tertinggi berjalan (Fase 3 — bidding). `null` kalau belum ada tawaran. */
   current_highest_bid: number | null;
+  /** User id pemenang lelang (Fase 4) — `null` kalau belum ada bid/bukan AUCTION. */
+  highest_bidder_id: string | null;
   created_at: string;
   seller_shop_name: string | null;
   weight_grams?: number | null;

@@ -12,7 +12,7 @@ import { VideoUpload } from '@/components/upload/video-upload';
 import { ApiError, apiClient } from '@/lib/proxy-client';
 import { slugify } from '@/lib/slugify';
 import type { CreateProductPayload, Product, ProductModeJual, UpdateProductPayload } from '@/lib/types';
-import { useTokoSaya } from '../_components/toko-saya-context';
+import { useTokoSaya } from './toko-saya-context';
 
 interface ProductFormModalProps {
   open: boolean;
@@ -20,6 +20,15 @@ interface ProductFormModalProps {
   /** `null`/`undefined` = mode tambah baru. Diisi = mode edit (HANYA untuk produk berstatus draft). */
   product?: Product | null;
   onSaved: () => void;
+  /**
+   * Dipanggil dari tab "Lelang Saya"/"Barang yang Dijual" (menu per-mode,
+   * restrukturisasi Dashboard) — cuma dipakai saat TAMBAH BARU (`!product`),
+   * mengunci `Mode Jual` sesuai tab asal (radio pilihan disembunyikan)
+   * supaya produk yang baru dibuat pasti muncul di tab yang sama tempat
+   * tombol "+ Tambah" diklik, bukan berakhir di tab mode lain karena user
+   * lupa pilih radio yang benar.
+   */
+  defaultModeJual?: ProductModeJual;
 }
 
 interface FormState {
@@ -109,7 +118,7 @@ function productToForm(product: Product): FormState {
  * draft (aturan backend), jadi modal ini tidak dipakai untuk produk yang
  * sudah published/sold/expired.
  */
-export function ProductFormModal({ open, onClose, product, onSaved }: ProductFormModalProps) {
+export function ProductFormModal({ open, onClose, product, onSaved, defaultModeJual }: ProductFormModalProps) {
   const { marketId } = useTokoSaya();
   const isEdit = !!product;
 
@@ -122,7 +131,9 @@ export function ProductFormModal({ open, onClose, product, onSaved }: ProductFor
   // sempat jalan — `RichTextEditor` yang baru mount di render pertama itu
   // sempat menerima `value` lama/kosong, hasil duplicate/edit produk lain
   // kadang tidak nempel ke editor.
-  const [form, setForm] = useState<FormState>(() => (product ? productToForm(product) : EMPTY_FORM));
+  const [form, setForm] = useState<FormState>(() =>
+    product ? productToForm(product) : { ...EMPTY_FORM, modeJual: defaultModeJual ?? EMPTY_FORM.modeJual },
+  );
   const [slugTouched, setSlugTouched] = useState(isEdit);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -259,26 +270,33 @@ export function ProductFormModal({ open, onClose, product, onSaved }: ProductFor
 
         <div>
           <label className="mb-1 block text-sm font-medium text-zinc-700">Mode Jual</label>
-          <div className="flex gap-4 text-sm">
-            <label className="flex items-center gap-2">
-              <input
-                type="radio"
-                name="mode_jual"
-                checked={form.modeJual === 'DIRECT_SELL'}
-                onChange={() => updateField('modeJual', 'DIRECT_SELL')}
-              />
-              Beli Langsung
-            </label>
-            <label className="flex items-center gap-2">
-              <input
-                type="radio"
-                name="mode_jual"
-                checked={form.modeJual === 'AUCTION'}
-                onChange={() => updateField('modeJual', 'AUCTION')}
-              />
-              Lelang
-            </label>
-          </div>
+          {!isEdit && defaultModeJual ? (
+            <p className="text-sm text-zinc-600">
+              {defaultModeJual === 'AUCTION' ? 'Lelang' : 'Beli Langsung'}{' '}
+              <span className="text-xs text-zinc-400">(mengikuti menu tempat Anda menambah produk ini)</span>
+            </p>
+          ) : (
+            <div className="flex gap-4 text-sm">
+              <label className="flex items-center gap-2">
+                <input
+                  type="radio"
+                  name="mode_jual"
+                  checked={form.modeJual === 'DIRECT_SELL'}
+                  onChange={() => updateField('modeJual', 'DIRECT_SELL')}
+                />
+                Beli Langsung
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="radio"
+                  name="mode_jual"
+                  checked={form.modeJual === 'AUCTION'}
+                  onChange={() => updateField('modeJual', 'AUCTION')}
+                />
+                Lelang
+              </label>
+            </div>
+          )}
         </div>
 
         <div>

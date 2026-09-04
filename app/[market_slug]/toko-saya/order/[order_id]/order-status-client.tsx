@@ -3,8 +3,10 @@
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 
+import { FulfillmentProgress } from '@/components/fulfillment-progress';
 import { ApiError, apiClient } from '@/lib/proxy-client';
 import type { Order } from '@/lib/types';
+import { PageTitle } from '../../_components/page-title';
 
 interface OrderStatusClientProps {
   marketSlug: string;
@@ -63,26 +65,25 @@ export function OrderStatusClient({ marketSlug, marketId, orderId, statusHint }:
     };
   }, [marketId, orderId]);
 
-  if (error && !order) {
-    return (
-      <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-[var(--brand-error)]">
-        {error}
-      </div>
-    );
-  }
-
   const status = order?.status ?? (statusHint === 'success' ? 'PENDING_PAYMENT' : statusHint === 'failed' ? 'FAILED' : null);
 
-  if (!status) {
-    return (
+  // Satu titik return (bukan early-return per kondisi seperti versi lama) —
+  // supaya `<PageTitle>` cuma perlu ditulis SEKALI di sini, bukan diulang di
+  // tiap cabang status (`error`/loading/PENDING_PAYMENT/HELD/FAILED).
+  let body: React.ReactNode;
+
+  if (error && !order) {
+    body = (
+      <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-[var(--brand-error)]">{error}</div>
+    );
+  } else if (!status) {
+    body = (
       <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-600">
         Memuat status pesanan…
       </div>
     );
-  }
-
-  if (status === 'PENDING_PAYMENT') {
-    return (
+  } else if (status === 'PENDING_PAYMENT') {
+    body = (
       <div className="space-y-3 rounded-lg border border-amber-200 bg-amber-50 p-4">
         <p className="text-sm font-medium text-amber-800">Menunggu pembayaran…</p>
         <p className="text-sm text-amber-700">
@@ -90,22 +91,17 @@ export function OrderStatusClient({ marketSlug, marketId, orderId, statusHint }:
         </p>
       </div>
     );
-  }
-
-  if (status === 'HELD') {
-    return (
+  } else if (status === 'HELD') {
+    body = (
       <div className="space-y-4">
         <div className="rounded-lg border border-green-200 bg-green-50 p-4">
           <p className="text-sm font-medium text-green-800">Pembayaran berhasil!</p>
-          <p className="mt-1 text-sm text-green-700">
-            Dana ditahan di escrow, produk sudah jadi milik Anda.
-          </p>
+          <p className="mt-1 text-sm text-green-700">Dana ditahan di escrow, produk sudah jadi milik Anda.</p>
         </div>
         {order && (
           <div className="space-y-1 rounded-lg border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-700">
             <p>
-              <span className="text-zinc-500">Total:</span>{' '}
-              {currencyFormatter.format(order.total_amount)}
+              <span className="text-zinc-500">Total:</span> {currencyFormatter.format(order.total_amount)}
             </p>
             <p>
               <span className="text-zinc-500">Penerima:</span> {order.recipient_name}
@@ -117,8 +113,7 @@ export function OrderStatusClient({ marketSlug, marketId, orderId, statusHint }:
               <span className="text-zinc-500">Alamat:</span> {order.address}
             </p>
             <p>
-              <span className="text-zinc-500">Tujuan:</span>{' '}
-              {order.destination_area_name || order.destination_area_id}
+              <span className="text-zinc-500">Tujuan:</span> {order.destination_area_name || order.destination_area_id}
             </p>
             {order.courier_code && (
               <p>
@@ -131,29 +126,37 @@ export function OrderStatusClient({ marketSlug, marketId, orderId, statusHint }:
             </p>
           </div>
         )}
+        {order && <FulfillmentProgress marketId={marketId} productId={order.product_id} role="buyer" />}
         <Link
-          href={`/${marketSlug}`}
+          href={`/${marketSlug}/toko-saya`}
           className="inline-block text-sm text-[var(--brand-primary)] hover:underline"
         >
-          ← Kembali ke katalog
+          ← Kembali ke Dashboard
+        </Link>
+      </div>
+    );
+  } else {
+    // status === 'FAILED'
+    body = (
+      <div className="space-y-4">
+        <div className="rounded-lg border border-red-200 bg-red-50 p-4">
+          <p className="text-sm font-medium text-[var(--brand-error)]">Pembayaran gagal.</p>
+          <p className="mt-1 text-sm text-red-700">Silakan coba lagi dari halaman produk.</p>
+        </div>
+        <Link
+          href={`/${marketSlug}/toko-saya`}
+          className="inline-block text-sm text-[var(--brand-primary)] hover:underline"
+        >
+          ← Kembali ke Dashboard
         </Link>
       </div>
     );
   }
 
-  // status === 'FAILED'
   return (
     <div className="space-y-4">
-      <div className="rounded-lg border border-red-200 bg-red-50 p-4">
-        <p className="text-sm font-medium text-[var(--brand-error)]">Pembayaran gagal.</p>
-        <p className="mt-1 text-sm text-red-700">Silakan coba lagi dari halaman produk.</p>
-      </div>
-      <Link
-        href={`/${marketSlug}`}
-        className="inline-block text-sm text-[var(--brand-primary)] hover:underline"
-      >
-        ← Kembali ke katalog
-      </Link>
+      <PageTitle>Status Pesanan</PageTitle>
+      {body}
     </div>
   );
 }

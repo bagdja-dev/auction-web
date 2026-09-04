@@ -19,7 +19,8 @@ export function TokoSayaSidebar({ marketSlug, collapsed, onToggleCollapsed }: Si
   const base = `/${marketSlug}/toko-saya`;
   const items = [
     { href: base, label: 'Dashboard' },
-    { href: `${base}/produk`, label: 'Produk Saya' },
+    { href: `${base}/lelang`, label: 'Lelang' },
+    { href: `${base}/beli-langsung`, label: 'Beli Langsung' },
     { href: `${base}/pengaturan`, label: 'Pengaturan Toko' },
   ];
 

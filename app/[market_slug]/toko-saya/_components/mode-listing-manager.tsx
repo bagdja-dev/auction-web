@@ -3,10 +3,11 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 
+import { FulfillmentProgress } from '@/components/fulfillment-progress';
 import { ApiError, apiClient } from '@/lib/proxy-client';
-import type { Product } from '@/lib/types';
-import { useTokoSaya } from '../_components/toko-saya-context';
-import { PageTitle } from '../_components/page-title';
+import type { Product, ProductFulfillment, ProductModeJual } from '@/lib/types';
+import { useTokoSaya } from './toko-saya-context';
+import { PageTitle } from './page-title';
 import { ProductFormModal } from './product-form-modal';
 
 const currencyFormatter = new Intl.NumberFormat('id-ID', {
@@ -29,38 +30,51 @@ const STATUS_BADGE_CLASS: Record<Product['status'], string> = {
   expired: 'bg-[var(--brand-error)] text-white',
 };
 
-/** List produk sendiri BERBASIS GRID (bukan tabel/list) + tambah/edit lewat Modal. */
-export default function ProdukContent() {
+interface ModeListingManagerProps {
+  modeJual: ProductModeJual;
+  title: string;
+}
+
+/**
+ * Sisi SELLER menu "Lelang"/"Beli Langsung" (restrukturisasi Dashboard per
+ * mode jual) — gabungan `produk/produk-content.tsx` (CRUD: tambah/edit/
+ * publish/turunkan/duplikat/lelang-ulang) DAN `pesanan/pesanan-content.tsx`
+ * (progress fulfillment untuk produk yang sudah `sold`), yang sebelumnya
+ * dua menu terpisah ("Produk Saya"/"Pesanan") — sekarang satu tampilan per
+ * mode, filter dilakukan CLIENT-SIDE dari `products/mine`/`fulfillments/mine`
+ * (kedua endpoint sudah balas SEMUA mode, tidak ada perubahan backend).
+ * `modeJual` DIKUNCI saat tambah produk baru (`ProductFormModal`
+ * `defaultModeJual`) — supaya produk yang baru dibuat dari sini pasti
+ * muncul di tab yang sama, bukan nyasar ke tab mode lain.
+ */
+export function ModeListingManager({ modeJual, title }: ModeListingManagerProps) {
   const { marketId, marketSlug, seller } = useTokoSaya();
 
   const [products, setProducts] = useState<Product[]>([]);
+  const [fulfillments, setFulfillments] = useState<ProductFulfillment[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
-  // Bug ditemukan 31 Agustus 2026: `ProductFormModal` TIDAK PERNAH unmount
-  // (komponen React yang sama sepanjang hidup halaman ini — cuma anaknya,
-  // `<Modal>`, yang unmount/remount lewat `if (!open) return null`), jadi
-  // state form internalnya di-seed ulang lewat `useEffect` yang jalan SATU
-  // RENDER SETELAH modal kebuka — render pertama (termasuk `RichTextEditor`
-  // yang baru pertama kali mount di render itu) sempat pakai state LAMA
-  // sebelum di-seed. Efeknya: deskripsi hasil duplicate/edit produk lain
-  // kadang tidak nempel ke editor WYSIWYG. `key` di bawah memaksa
-  // `ProductFormModal` remount TOTAL tiap kali dibuka (produk apa pun,
-  // termasuk buka form "Tambah Baru" dua kali berturut-turut) — state
-  // internalnya jadi bisa lazy-init LANGSUNG dari `product` di render
-  // pertama, tidak ada lagi render "stale" sebelum ke-seed.
+  // Lihat catatan panjang di `produk-content.tsx` versi lama soal kenapa
+  // `key` ini wajib ada (paksa remount total `ProductFormModal` tiap dibuka).
   const [modalSessionKey, setModalSessionKey] = useState(0);
 
   const [busyId, setBusyId] = useState<string | null>(null);
   const [rowError, setRowError] = useState<Record<string, string>>({});
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
-  const loadProducts = useCallback(async () => {
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const list = await apiClient<Product[]>(`/api/markets/${marketId}/products/mine`);
-      setProducts(list);
+      const [productList, fulfillmentList] = await Promise.all([
+        apiClient<Product[]>(`/api/markets/${marketId}/products/mine`),
+        apiClient<ProductFulfillment[]>(`/api/markets/${marketId}/fulfillments/mine`),
+      ]);
+      setProducts(productList);
+      setFulfillments(fulfillmentList);
+      setLoadError(null);
     } catch (err) {
       setLoadError(err instanceof ApiError ? err.message : 'Gagal memuat daftar produk.');
     } finally {
@@ -68,13 +82,10 @@ export default function ProdukContent() {
     }
   }, [marketId]);
 
-  // Belum daftar toko (polish 31 Agustus 2026) — endpoint ini scoped ke
-  // seller pemanggil (`SellerOwnershipGuard`), tidak ada gunanya dipanggil
-  // kalau seller-nya belum ada sama sekali.
   useEffect(() => {
     if (!seller) return;
-    void loadProducts();
-  }, [loadProducts, seller]);
+    void loadData();
+  }, [loadData, seller]);
 
   function openCreateModal() {
     setEditingProduct(null);
@@ -93,7 +104,7 @@ export default function ProdukContent() {
     setRowError((prev) => ({ ...prev, [productId]: '' }));
     try {
       await apiClient<Product>(`/api/markets/${marketId}/products/${productId}/publish`, { method: 'POST' });
-      await loadProducts();
+      await loadData();
     } catch (err) {
       setRowError((prev) => ({
         ...prev,
@@ -111,7 +122,7 @@ export default function ProdukContent() {
       await apiClient<{ deleted: boolean }>(`/api/markets/${marketId}/products/${productId}`, {
         method: 'DELETE',
       });
-      await loadProducts();
+      await loadData();
     } catch (err) {
       setRowError((prev) => ({
         ...prev,
@@ -122,13 +133,12 @@ export default function ProdukContent() {
     }
   }
 
-  /** "Turunkan" — batalkan publikasi, produk balik jadi draft (bukan dihapus). */
   async function handleUnpublish(productId: string) {
     setBusyId(productId);
     setRowError((prev) => ({ ...prev, [productId]: '' }));
     try {
       await apiClient<Product>(`/api/markets/${marketId}/products/${productId}/unpublish`, { method: 'POST' });
-      await loadProducts();
+      await loadData();
     } catch (err) {
       setRowError((prev) => ({
         ...prev,
@@ -139,7 +149,6 @@ export default function ProdukContent() {
     }
   }
 
-  /** Duplikat produk (status apapun) jadi draft baru, lalu langsung buka modal edit untuk disesuaikan. */
   async function handleDuplicate(productId: string) {
     setBusyId(productId);
     setRowError((prev) => ({ ...prev, [productId]: '' }));
@@ -147,7 +156,7 @@ export default function ProdukContent() {
       const copy = await apiClient<Product>(`/api/markets/${marketId}/products/${productId}/duplicate`, {
         method: 'POST',
       });
-      await loadProducts();
+      await loadData();
       openEditModal(copy);
     } catch (err) {
       setRowError((prev) => ({
@@ -159,10 +168,29 @@ export default function ProdukContent() {
     }
   }
 
+  async function handleReList(productId: string) {
+    setBusyId(productId);
+    setRowError((prev) => ({ ...prev, [productId]: '' }));
+    try {
+      const relisted = await apiClient<Product>(`/api/markets/${marketId}/products/${productId}/re-list`, {
+        method: 'POST',
+      });
+      await loadData();
+      openEditModal(relisted);
+    } catch (err) {
+      setRowError((prev) => ({
+        ...prev,
+        [productId]: err instanceof ApiError ? err.message : 'Gagal melelang ulang produk.',
+      }));
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   if (!seller) {
     return (
       <div className="space-y-4">
-        <PageTitle>Produk Saya</PageTitle>
+        <PageTitle>{title}</PageTitle>
         <p className="rounded-xl border border-zinc-200 bg-white p-6 text-sm text-zinc-500 shadow-sm">
           Anda belum punya toko di Market ini. Buat toko dulu lewat halaman{' '}
           <Link href={`/${marketSlug}/toko-saya`} className="font-medium text-[var(--brand-primary)] hover:underline">
@@ -174,10 +202,13 @@ export default function ProdukContent() {
     );
   }
 
+  const modeProducts = products.filter((p) => p.mode_jual === modeJual);
+  const fulfillmentByProduct = new Map(fulfillments.filter((f) => f.mode_jual === modeJual).map((f) => [f.product_id, f]));
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-4">
-        <PageTitle>Produk Saya</PageTitle>
+        <PageTitle>{title}</PageTitle>
         <button
           type="button"
           onClick={openCreateModal}
@@ -191,15 +222,17 @@ export default function ProdukContent() {
 
       {loading ? (
         <p className="text-sm text-zinc-500">Memuat produk…</p>
-      ) : products.length === 0 ? (
+      ) : modeProducts.length === 0 ? (
         <p className="rounded-xl border border-dashed border-zinc-300 p-8 text-center text-sm text-zinc-500">
           Belum ada produk. Klik &ldquo;+ Tambah Produk&rdquo; untuk mulai berjualan.
         </p>
       ) : (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-          {products.map((product) => {
+          {modeProducts.map((product) => {
             const cover = product.images?.[0] ?? null;
             const isDraft = product.status === 'draft';
+            const fulfillment = fulfillmentByProduct.get(product.id);
+            const isExpanded = expandedId === product.id;
             return (
               <div
                 key={product.id}
@@ -225,9 +258,6 @@ export default function ProdukContent() {
                       {STATUS_LABEL[product.status]}
                     </span>
                   </div>
-                  <p className="text-xs text-zinc-500">
-                    {product.mode_jual === 'AUCTION' ? 'Lelang' : 'Beli Langsung'}
-                  </p>
                   <p className="text-sm font-semibold text-[var(--brand-primary)]">
                     {currencyFormatter.format(product.price)}
                   </p>
@@ -285,6 +315,26 @@ export default function ProdukContent() {
                         </button>
                       </>
                     )}
+                    {product.status === 'expired' && (
+                      <button
+                        type="button"
+                        onClick={() => handleReList(product.id)}
+                        disabled={busyId === product.id}
+                        title="Bikin draft baru hasil copy produk ini untuk dilelang/dijual ulang"
+                        className="rounded-md bg-[var(--brand-primary)] px-2.5 py-1 text-xs font-medium text-white transition hover:bg-[var(--brand-primary-hover)] disabled:opacity-50"
+                      >
+                        {busyId === product.id ? '…' : 'Lelang Ulang'}
+                      </button>
+                    )}
+                    {fulfillment && (
+                      <button
+                        type="button"
+                        onClick={() => setExpandedId(isExpanded ? null : product.id)}
+                        className="rounded-md border border-zinc-300 px-2.5 py-1 text-xs font-medium text-zinc-700 transition hover:bg-zinc-50"
+                      >
+                        {isExpanded ? 'Sembunyikan Progress' : 'Lihat Progress Pengiriman'}
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => handleDuplicate(product.id)}
@@ -295,6 +345,12 @@ export default function ProdukContent() {
                       Duplikat
                     </button>
                   </div>
+
+                  {fulfillment && isExpanded && (
+                    <div className="mt-2 border-t border-zinc-100 pt-2">
+                      <FulfillmentProgress marketId={marketId} productId={product.id} role="seller" />
+                    </div>
+                  )}
                 </div>
               </div>
             );
@@ -307,7 +363,8 @@ export default function ProdukContent() {
         open={modalOpen}
         onClose={() => setModalOpen(false)}
         product={editingProduct}
-        onSaved={loadProducts}
+        onSaved={loadData}
+        defaultModeJual={modeJual}
       />
     </div>
   );

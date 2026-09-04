@@ -138,7 +138,7 @@ export interface CheckoutPayload {
   courier_service_name?: string;
 }
 
-export type AuctionRegistrationStatus = 'PENDING_PAYMENT' | 'HELD';
+export type AuctionRegistrationStatus = 'PENDING_PAYMENT' | 'HELD' | 'REFUNDED' | 'FORFEITED';
 
 /** Registrasi + deposit lelang — pasangan `Order` di atas tapi untuk mode AUCTION (Fase 3). */
 export interface AuctionRegistration {
@@ -199,4 +199,127 @@ export interface PlaceBidResponse {
     status: ProductStatus;
     [key: string]: unknown;
   };
+}
+
+export type AuctionSettlementStatus = 'PENDING_PAYMENT' | 'HELD';
+
+/** Tagihan pelunasan pemenang lelang (Fase 4) — `final_amount - deposit_amount`, escrow terpisah dari deposit. */
+export interface AuctionSettlement {
+  id: string;
+  market_id: string;
+  product_id: string;
+  registration_id: string;
+  buyer_user_id: string;
+  seller_id: string;
+  final_amount: number;
+  deposit_amount: number;
+  total_amount: number;
+  currency: string;
+  escrow_id: string | null;
+  payment_request_id: string | null;
+  checkout_url: string | null;
+  status: AuctionSettlementStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AuctionSettlementMeResponse {
+  exists: boolean;
+  settlement: AuctionSettlement | null;
+}
+
+export type MasterFlowFormFieldType = 'text' | 'textarea' | 'number' | 'image_url';
+
+export interface MasterFlowFormField {
+  key: string;
+  label: string;
+  type: MasterFlowFormFieldType;
+  required: boolean;
+}
+
+/** Definisi satu step Master Flow (Fase 5) — SATU Master Flow berlaku untuk semua produk di Market. */
+export interface MasterFlowStep {
+  id: string;
+  market_id: string;
+  sequence: number;
+  status_name: string;
+  description: string | null;
+  process_day: number | null;
+  form_schema: MasterFlowFormField[] | null;
+  release_percentage: number | null;
+  guaranty_days: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type ProductFulfillmentStatus = 'IN_PROGRESS' | 'COMPLETED';
+
+export interface ProductFulfillment {
+  id: string;
+  market_id: string;
+  product_id: string;
+  seller_id: string;
+  buyer_user_id: string;
+  mode_jual: ProductModeJual;
+  current_step_sequence: number;
+  current_step_guaranty_ends_at: string | null;
+  final_guaranty_ends_at: string | null;
+  total_released: number;
+  status: ProductFulfillmentStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+export type ProductFulfillmentEventType =
+  | 'STEP_COMPLETED'
+  | 'STEP_RELEASE_APPROVED'
+  | 'STEP_AUTO_RELEASED'
+  | 'DELIVERED'
+  | 'AUTO_DELIVERED';
+
+export interface ProductFulfillmentLog {
+  id: string;
+  event_type: ProductFulfillmentEventType;
+  step_sequence: number | null;
+  step_status_name: string | null;
+  form_data: Record<string, unknown> | null;
+  release_amount: number | null;
+  created_at: string;
+}
+
+/** Hasil `GET .../fulfillment`. */
+export interface FulfillmentProgress {
+  fulfillment: ProductFulfillment;
+  steps: MasterFlowStep[];
+  logs: ProductFulfillmentLog[];
+  can_confirm: boolean;
+  can_approve_current_step: boolean;
+}
+
+export type PurchaseCategory =
+  | 'AWAITING_DEPOSIT'
+  | 'ONGOING_AUCTION'
+  | 'AWAITING_PAYMENT'
+  | 'AWAITING_SETTLEMENT'
+  | 'IN_FULFILLMENT'
+  | 'COMPLETED'
+  | 'LOST'
+  | 'FORFEITED'
+  | 'FAILED';
+
+/** Satu baris `GET .../purchases/mine` — halaman "Pembelian Saya" buyer. */
+export interface PurchaseRow {
+  product_id: string;
+  product_name: string;
+  product_slug: string;
+  mode_jual: ProductModeJual;
+  category: PurchaseCategory;
+  amount: number;
+  currency: string;
+  checkout_url: string | null;
+  order_id: string | null;
+  registration_id: string | null;
+  settlement_id: string | null;
+  fulfillment_id: string | null;
+  updated_at: string;
 }

@@ -6,7 +6,7 @@ import { useEffect, useState } from 'react';
 import { apiClient } from '@/lib/proxy-client';
 import type { Product, WalletBalance } from '@/lib/types';
 import { useTokoSaya } from './toko-saya-context';
-import { ProductIcon, SettingsIcon } from './icons';
+import { AuctionIcon, ProductIcon, SettingsIcon } from './icons';
 
 const currencyFormatter = new Intl.NumberFormat('id-ID', {
   style: 'currency',
@@ -145,11 +145,18 @@ export default function DashboardContent() {
       {/* Grid ikon menu — cuma tampil di mobile (<md), desktop sudah punya sidebar */}
       <section className="grid grid-cols-2 gap-3 md:hidden">
         <Link
-          href={`/${marketSlug}/toko-saya/produk`}
+          href={`/${marketSlug}/toko-saya/lelang`}
+          className="flex flex-col items-center gap-2 rounded-xl border border-zinc-200 bg-white p-5 text-center shadow-sm transition hover:border-[var(--brand-primary)]"
+        >
+          <AuctionIcon className="h-6 w-6 text-[var(--brand-primary)]" />
+          <span className="text-sm font-medium text-zinc-700">Lelang</span>
+        </Link>
+        <Link
+          href={`/${marketSlug}/toko-saya/beli-langsung`}
           className="flex flex-col items-center gap-2 rounded-xl border border-zinc-200 bg-white p-5 text-center shadow-sm transition hover:border-[var(--brand-primary)]"
         >
           <ProductIcon className="h-6 w-6 text-[var(--brand-primary)]" />
-          <span className="text-sm font-medium text-zinc-700">Produk Saya</span>
+          <span className="text-sm font-medium text-zinc-700">Beli Langsung</span>
         </Link>
         <Link
           href={`/${marketSlug}/toko-saya/pengaturan`}

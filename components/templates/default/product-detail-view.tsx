@@ -112,6 +112,14 @@ export default function ProductDetailView({
   const displayName = user?.username ?? user?.email ?? undefined;
   const searchParams = useSearchParams();
   const isOwnerView = searchParams.get('view') === 'owner';
+  /**
+   * Link dari Dashboard "Toko Saya" (baik seller lihat listing sendiri via
+   * `?view=owner`, atau buyer via `?from=dashboard` di `pembelian-saya-content.tsx`)
+   * — sebelumnya begitu masuk sini TIDAK ADA jalan balik ke Dashboard selain
+   * tombol back browser, karena `MarketAppBar` di halaman ini SELALU cuma
+   * kasih link "Kembali ke {marketName}" (ke katalog publik).
+   */
+  const cameFromDashboard = isOwnerView || searchParams.get('from') === 'dashboard';
   const isAuction = product.mode_jual === 'AUCTION';
   const imageUrls = product.images && product.images.length > 0 ? product.images : [];
   const slides: Slide[] = [
@@ -206,12 +214,21 @@ export default function ProductDetailView({
         isLoggedIn={isLoggedIn}
         displayName={displayName}
         left={
-          <Link
-            href={`/${marketSlug}`}
-            className="flex items-center gap-1.5 text-sm font-medium text-zinc-600 hover:text-[var(--brand-primary)]"
-          >
-            ← Kembali ke {marketName}
-          </Link>
+          cameFromDashboard ? (
+            <Link
+              href={`/${marketSlug}/toko-saya`}
+              className="flex items-center gap-1.5 text-sm font-medium text-zinc-600 hover:text-[var(--brand-primary)]"
+            >
+              ← Kembali ke Dashboard
+            </Link>
+          ) : (
+            <Link
+              href={`/${marketSlug}`}
+              className="flex items-center gap-1.5 text-sm font-medium text-zinc-600 hover:text-[var(--brand-primary)]"
+            >
+              ← Kembali ke {marketName}
+            </Link>
+          )
         }
       />
 
@@ -443,6 +460,7 @@ export default function ProductDetailView({
                 auctionEndAt={product.auction_end_at}
                 productStatus={product.status}
                 registrationDeadlineMinutes={registrationDeadlineMinutes}
+                highestBidderId={product.highest_bidder_id}
                 readOnly={isOwnerView}
               />
             ) : isOwnerView ? (

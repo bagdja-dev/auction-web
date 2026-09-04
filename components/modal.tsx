@@ -14,7 +14,7 @@ interface ModalProps {
  * Modal Tailwind polos — aplikasi ini tidak pakai shadcn/ui (beda dari
  * `bagdja-auction-admin`), jadi dibuat manual: overlay + panel ter-scroll,
  * tutup lewat Esc/klik overlay/tombol ×. Dipakai untuk form tambah/edit
- * produk di halaman "Toko Saya" — lihat `app/[market_slug]/toko-saya/produk`.
+ * produk di halaman "Toko Saya" — lihat `app/[market_slug]/toko-saya/_components/product-form-modal.tsx`.
  */
 export function Modal({ open, onClose, title, children }: ModalProps) {
   useEffect(() => {
