@@ -102,6 +102,31 @@ export interface WalletBalance {
   is_active: boolean;
 }
 
+/** Satu baris mutasi wallet — `GET /api/wallet/transactions`. Positif = kredit (masuk), negatif = debit (keluar). */
+export interface WalletTransaction {
+  id: string;
+  wallet_id: string;
+  amount: number;
+  type: string;
+  reference_id: string | null;
+  metadata: Record<string, unknown> | null;
+  external_id: string | null;
+  description: string | null;
+  created_at: string;
+  currency: string | null;
+}
+
+export interface WalletTransactionsResponse {
+  data: WalletTransaction[];
+  meta: {
+    totalItems: number;
+    itemCount: number;
+    itemsPerPage: number;
+    totalPages: number;
+    currentPage: number;
+  };
+}
+
 export type OrderStatus = 'PENDING_PAYMENT' | 'HELD' | 'FAILED';
 
 /** Ringkasan produk untuk galeri media (`ProductMediaGallery`) — ditempel di `GET :id` Order/Settlement, lihat `common/dto/product-media-summary.dto.ts` (backend). */

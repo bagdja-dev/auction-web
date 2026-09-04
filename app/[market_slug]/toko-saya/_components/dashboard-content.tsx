@@ -107,23 +107,33 @@ export default function DashboardContent() {
       </section>
 
       <section className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
-        <p className="text-xs font-medium uppercase tracking-wide text-zinc-400">Saldo</p>
-        {walletError ? (
-          <p className="mt-1 text-sm text-[var(--brand-error)]">{walletError}</p>
-        ) : wallet ? (
-          <>
-            <p className="mt-1 text-2xl font-semibold text-[var(--brand-primary)]">
-              {currencyFormatter.format(wallet.balance)}
-            </p>
-            {wallet.held_balance > 0 && (
-              <p className="mt-0.5 text-xs text-zinc-500">
-                + {currencyFormatter.format(wallet.held_balance)} tertahan di escrow
-              </p>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-xs font-medium uppercase tracking-wide text-zinc-400">Saldo</p>
+            {walletError ? (
+              <p className="mt-1 text-sm text-[var(--brand-error)]">{walletError}</p>
+            ) : wallet ? (
+              <>
+                <p className="mt-1 text-2xl font-semibold text-[var(--brand-primary)]">
+                  {currencyFormatter.format(wallet.balance)}
+                </p>
+                {wallet.held_balance > 0 && (
+                  <p className="mt-0.5 text-xs text-zinc-500">
+                    + {currencyFormatter.format(wallet.held_balance)} tertahan di escrow
+                  </p>
+                )}
+              </>
+            ) : (
+              <p className="mt-1 text-sm text-zinc-400">Memuat…</p>
             )}
-          </>
-        ) : (
-          <p className="mt-1 text-sm text-zinc-400">Memuat…</p>
-        )}
+          </div>
+          <Link
+            href={`/${marketSlug}/toko-saya/wallet`}
+            className="shrink-0 rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 transition hover:bg-zinc-50"
+          >
+            Detail Wallet
+          </Link>
+        </div>
       </section>
 
       <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
