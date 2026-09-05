@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { setSessionCookies } from '@/lib/session';
 import { consumeOAuthState } from '@/lib/oauth-state-store';
+import { resolveOrigin } from '@/lib/resolve-origin';
 
 const AUTH_URL = process.env.NEXT_PUBLIC_AUTH_URL ?? 'https://login.bagdja.com';
 const CLIENT_ID = process.env.NEXT_PUBLIC_CLIENT_ID ?? 'auction-market';
@@ -9,27 +10,35 @@ const REDIRECT_URI =
   process.env.NEXT_PUBLIC_REDIRECT_URI ?? 'http://localhost:5012/auth/callback';
 
 export async function GET(request: NextRequest) {
+  // `resolveOrigin()` (bukan `request.url`/`request.nextUrl.origin` langsung)
+  // — di belakang Traefik/Coolify itu bisa meleset jadi bind address
+  // container (`0.0.0.0:3000`), lihat lib/resolve-origin.ts. Dipakai untuk
+  // SEMUA redirect error di route ini (`request.url` tidak pernah dipakai
+  // lagi sebagai base redirect), supaya user tidak pernah diarahkan ke host
+  // yang tidak bisa diakses browser-nya.
+  const origin = resolveOrigin(request);
+
   const { searchParams } = new URL(request.url);
   const code = searchParams.get('code');
   const state = searchParams.get('state');
   const error = searchParams.get('error');
 
   if (error) {
-    return NextResponse.redirect(new URL('/?error=auth_denied', request.url));
+    return NextResponse.redirect(new URL('/?error=auth_denied', origin));
   }
 
   if (!code || !state) {
-    return NextResponse.redirect(new URL('/?error=missing_params', request.url));
+    return NextResponse.redirect(new URL('/?error=missing_params', origin));
   }
 
-  // code_verifier + next path dibaca dari Upstash Redis (sekali pakai, lalu
-  // dihapus) — bukan dari cookie, supaya tidak terpengaruh Safari yang tidak
+  // code_verifier + next path dibaca dari Redis (sekali pakai, lalu dihapus)
+  // — bukan dari cookie, supaya tidak terpengaruh Safari yang tidak
   // konsisten menyimpan Set-Cookie yang menempel di response redirect (lihat
   // login/route.ts).
   const decoded = await consumeOAuthState(state);
 
   if (!decoded) {
-    return NextResponse.redirect(new URL('/?error=state_mismatch', request.url));
+    return NextResponse.redirect(new URL('/?error=state_mismatch', origin));
   }
 
   const codeVerifier = decoded.codeVerifier;
@@ -51,7 +60,7 @@ export async function GET(request: NextRequest) {
     if (!tokenRes.ok) {
       const errBody = await tokenRes.text();
       console.error('Token exchange failed:', errBody);
-      return NextResponse.redirect(new URL('/?error=token_failed', request.url));
+      return NextResponse.redirect(new URL('/?error=token_failed', origin));
     }
 
     const data = await tokenRes.json();
@@ -86,6 +95,6 @@ export async function GET(request: NextRequest) {
     return response;
   } catch (err) {
     console.error('OAuth callback error:', err);
-    return NextResponse.redirect(new URL('/?error=server_error', request.url));
+    return NextResponse.redirect(new URL('/?error=server_error', origin));
   }
 }
