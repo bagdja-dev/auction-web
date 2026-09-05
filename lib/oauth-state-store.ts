@@ -1,17 +1,36 @@
 /**
- * Penyimpanan `code_verifier` + `next` path sisi server (Upstash Redis),
- * dikunci oleh ID pendek acak yang dikirim sebagai `state` OAuth.
+ * Penyimpanan `code_verifier` + `next` path sisi server (Redis biasa via
+ * `ioredis`, bukan Upstash — deployment ini di Coolify yang sudah punya
+ * Redis self-hosted untuk BullMQ (`bagdja-auction-api`), tidak perlu
+ * dependency terpisah ke Upstash cloud), dikunci oleh ID pendek acak yang
+ * dikirim sebagai `state` OAuth.
  *
- * Pola PERSIS di-port dari `bagdja-auction-admin/src/lib/oauth-state-store.ts`
- * (yang sendiri porting dari `bagdja-website-admin`/`bagdja-pos/admin`) — lihat
- * file itu untuk alasan desain lengkap (kenapa bukan cookie, kenapa bukan
- * `state` terenkripsi).
+ * Di-port dari `bagdja-website/lib/oauth-state-store.ts` (renderer publik
+ * lain di ekosistem yang sudah pakai pola ini di production) — MENGGANTIKAN
+ * versi Upstash REST sebelumnya (di-port dari `bagdja-auction-admin`, pola
+ * beda-app yang ternyata tidak cocok: permintaan eksplisit user 5 September
+ * 2026, reuse Redis self-hosted yang sudah ada, bukan provision Upstash baru).
+ *
+ * - Bukan cookie murni: Safari tidak konsisten menyimpan Set-Cookie yang
+ *   menempel di response redirect → state_mismatch di iOS.
+ * - `state` cuma ID pendek (~24 karakter) — tidak di-flag ad-blocker.
+ *
+ * Fallback priority:
+ *   1. Redis — jika `REDIS_URL` dikonfigurasi → pakai ini
+ *   2. globalThis memory store — HANYA kalau Redis null DAN `NODE_ENV !== production`
+ *      (pakai globalThis supaya tidak hilang saat Next.js hot-reload
+ *      module-level state; production TANPA Redis sengaja gagal total,
+ *      bukan diam-diam pakai memory yang putus tiap restart/instance beda)
+ *   3. Set-Cookie short-lived — cadangan defensif kalau dua di atas gagal
+ *      (path `/auth`, di-set sebelum redirect lintas domain ke Auth)
  */
 import crypto from 'crypto';
-import { Redis } from '@upstash/redis';
+import Redis from 'ioredis';
+import { cookies } from 'next/headers';
 
 const STATE_KEY_PREFIX = 'oauth_state:';
 const DEFAULT_TTL_SECONDS = 600;
+const COOKIE_STATE_PREFIX = 'oauthst_';
 
 export interface OAuthStatePayload {
   codeVerifier: string;
@@ -27,47 +46,75 @@ export interface OAuthStatePayload {
   origin: string;
 }
 
-let cachedClient: Redis | null | undefined;
+type MemoryEntry = { payload: OAuthStatePayload; expiresAt: number };
 
-/**
- * Terima dua konvensi nama env var — `KV_REST_API_URL`/`KV_REST_API_TOKEN`
- * (dipakai Vercel Marketplace waktu connect provider apa pun termasuk
- * Upstash, demi kompatibilitas mundur dengan `@vercel/kv`) atau
- * `UPSTASH_REDIS_REST_URL`/`UPSTASH_REDIS_REST_TOKEN` (penamaan asli
- * Upstash kalau di-provision langsung tanpa lewat Marketplace Vercel).
- */
-function getRedisClient(): Redis | null {
-  if (cachedClient !== undefined) return cachedClient;
+// globalThis (bukan module-level `let`) — supaya tidak hilang saat Next.js
+// hot-reload me-reset module state di dev, dan Symbol.for() unik per app
+// kalau suatu saat beberapa Next.js app ke-bundle dalam satu proses.
+const GLOBAL_STORE_KEY = Symbol.for('bagdja.auction.renderer.oauthMemoryStore');
+const GLOBAL_CLIENT_KEY = Symbol.for('bagdja.auction.renderer.redisClient');
 
-  const url = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
+type OAuthGlobal = {
+  [GLOBAL_STORE_KEY]?: Map<string, MemoryEntry>;
+  [GLOBAL_CLIENT_KEY]?: Redis | null;
+};
 
-  // Placeholder "TODO-isi-..." (belum dikonfigurasi) harus dianggap "belum
-  // dikonfigurasi", bukan value asli — kalau tidak, client Redis dibuat
-  // dengan URL sampah dan langsung throw saat dipakai (bukan fallback).
-  const isConfigured = Boolean(url && token && url.startsWith('https://'));
-
-  cachedClient = isConfigured ? new Redis({ url: url!, token: token! }) : null;
-  return cachedClient;
+function getOAuthGlobal(): OAuthGlobal {
+  const g = globalThis as unknown as OAuthGlobal;
+  if (!g[GLOBAL_STORE_KEY]) {
+    g[GLOBAL_STORE_KEY] = new Map<string, MemoryEntry>();
+  }
+  return g;
 }
 
-/**
- * Fallback in-memory — dipakai HANYA kalau Upstash belum dikonfigurasi DAN
- * bukan production (biar kesalahan config di production tetap kelihatan,
- * bukan diam-diam "berhasil" pakai memory lalu putus tiap restart/instance
- * berbeda). Untuk dev lokal ini cukup: satu proses Next.js, state cuma
- * hidup ~10 menit dan sekali pakai — tidak butuh Redis sungguhan.
- */
-const memoryStore = new Map<string, { payload: OAuthStatePayload; expiresAt: number }>();
+function getMemoryStore(): Map<string, MemoryEntry> {
+  return getOAuthGlobal()[GLOBAL_STORE_KEY]!;
+}
+
+function getCachedRedisClient(): Redis | null | undefined {
+  return getOAuthGlobal()[GLOBAL_CLIENT_KEY];
+}
+
+function setCachedRedisClient(value: Redis | null): void {
+  getOAuthGlobal()[GLOBAL_CLIENT_KEY] = value;
+}
+
+function getRedisClient(): Redis | null {
+  const cached = getCachedRedisClient();
+  if (cached !== undefined) return cached;
+
+  const url = process.env.REDIS_URL;
+  const isConfigured = Boolean(url && /^rediss?:\/\//.test(url) && !url.includes('change-me'));
+
+  if (!isConfigured) {
+    setCachedRedisClient(null);
+    return null;
+  }
+
+  const client = new Redis(url!, {
+    lazyConnect: false,
+    maxRetriesPerRequest: 1,
+  });
+  // ioredis emits 'error' pada tiap hiccup koneksi — tanpa listener ini Node
+  // akan crash (unhandled 'error' event). Reconnect ditangani ioredis
+  // sendiri, di sini cuma log supaya tidak silent.
+  client.on('error', (err) => {
+    console.error(`[oauth-state] redis client error: ${err?.message ?? err}`);
+  });
+
+  setCachedRedisClient(client);
+  return client;
+}
 
 function isMemoryFallbackAllowed(): boolean {
   return process.env.NODE_ENV !== 'production';
 }
 
 function purgeExpiredMemoryEntries(): void {
+  const store = getMemoryStore();
   const now = Date.now();
-  for (const [key, entry] of memoryStore) {
-    if (entry.expiresAt <= now) memoryStore.delete(key);
+  for (const [key, entry] of store) {
+    if (entry.expiresAt <= now) store.delete(key);
   }
 }
 
@@ -76,44 +123,89 @@ export function generateStateId(): string {
   return crypto.randomBytes(18).toString('base64url');
 }
 
+function cookieKeyFor(stateId: string): string {
+  return `${COOKIE_STATE_PREFIX}${stateId.slice(0, 8)}`;
+}
+
 export async function saveOAuthState(
-  id: string,
+  stateId: string,
   payload: OAuthStatePayload,
   ttlSeconds = DEFAULT_TTL_SECONDS,
 ): Promise<boolean> {
   const redis = getRedisClient();
-  if (!redis) {
-    if (!isMemoryFallbackAllowed()) return false;
-    purgeExpiredMemoryEntries();
-    memoryStore.set(`${STATE_KEY_PREFIX}${id}`, { payload, expiresAt: Date.now() + ttlSeconds * 1000 });
-    return true;
+  const key = `${STATE_KEY_PREFIX}${stateId}`;
+
+  if (redis) {
+    try {
+      await redis.set(key, JSON.stringify(payload), 'EX', ttlSeconds);
+      return true;
+    } catch (error: any) {
+      console.error(`[oauth-state] save REDIS FAIL stateId=${stateId}: ${error?.message ?? error}`);
+    }
   }
-  // Kirim object langsung (bukan JSON.stringify manual) — SDK @upstash/redis
-  // otomatis JSON-encode saat SET dan JSON-decode saat GET/GETDEL.
-  await redis.set(`${STATE_KEY_PREFIX}${id}`, payload, { ex: ttlSeconds });
+
+  if (!isMemoryFallbackAllowed()) {
+    console.error('[oauth-state] save: production mode & no redis → fail');
+    return false;
+  }
+
+  purgeExpiredMemoryEntries();
+  getMemoryStore().set(key, { payload, expiresAt: Date.now() + ttlSeconds * 1000 });
+
+  try {
+    const jar = await cookies();
+    jar.set(cookieKeyFor(stateId), JSON.stringify(payload), {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/auth',
+      maxAge: ttlSeconds,
+    });
+  } catch {
+    // Set-Cookie dari Route Handler bisa gagal di konteks tertentu (mis.
+    // sudah lewat batas response) — memory store di atas tetap cukup untuk dev lokal.
+  }
+
   return true;
 }
 
-/** Sekali pakai — baca lalu langsung hapus (`GETDEL`, atomik) supaya `state` tidak bisa dipakai ulang (replay). */
-export async function consumeOAuthState(id: string): Promise<OAuthStatePayload | null> {
+/** Sekali pakai — GET lalu DEL (bukan GETDEL, kompatibel Redis <6.2) supaya `state` tidak bisa dipakai ulang (replay). */
+export async function consumeOAuthState(stateId: string): Promise<OAuthStatePayload | null> {
   const redis = getRedisClient();
-  if (!redis) {
-    if (!isMemoryFallbackAllowed()) return null;
-    const key = `${STATE_KEY_PREFIX}${id}`;
-    const entry = memoryStore.get(key);
-    memoryStore.delete(key);
-    if (!entry || entry.expiresAt <= Date.now()) return null;
-    return entry.payload;
+  const key = `${STATE_KEY_PREFIX}${stateId}`;
+
+  if (redis) {
+    try {
+      const raw = await redis.get(key);
+      if (raw) {
+        await redis.del(key);
+        const payload = JSON.parse(raw) as OAuthStatePayload;
+        if (payload?.codeVerifier) return payload;
+      }
+    } catch (error: any) {
+      console.error(`[oauth-state] consume REDIS FAIL stateId=${stateId}: ${error?.message ?? error}`);
+    }
   }
 
-  const raw = await redis.getdel<OAuthStatePayload | string>(`${STATE_KEY_PREFIX}${id}`);
-  if (!raw) return null;
+  if (isMemoryFallbackAllowed()) {
+    const store = getMemoryStore();
+    const entry = store.get(key);
+    store.delete(key);
+    if (entry && entry.expiresAt > Date.now()) return entry.payload;
 
-  try {
-    const payload = typeof raw === 'string' ? (JSON.parse(raw) as OAuthStatePayload) : raw;
-    if (!payload?.codeVerifier) return null;
-    return payload;
-  } catch {
-    return null;
+    try {
+      const jar = await cookies();
+      const ck = cookieKeyFor(stateId);
+      const rawCookie = jar.get(ck)?.value ?? null;
+      if (rawCookie) {
+        const parsed = JSON.parse(rawCookie) as OAuthStatePayload;
+        jar.delete(ck);
+        if (parsed?.codeVerifier) return parsed;
+      }
+    } catch {
+      // Cookie fallback opsional — diam kalau gagal, sudah jelas dari return null di bawah.
+    }
   }
+
+  return null;
 }
