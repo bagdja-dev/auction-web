@@ -23,6 +23,19 @@ interface ListingDetailContentProps {
   productId: string;
 }
 
+/**
+ * Kurir/ongkir cuma hidup di `AuctionSettlement` (dihitung saat pelunasan,
+ * lihat `AuctionSettlementService.createOrGet()`) — TIDAK PERNAH ada di
+ * `AuctionRegistration` sama sekali (kurir belum dipilih saat registrasi).
+ * Jadi buat mode requiresRegistration=true, `winner` = data alamat dari
+ * `AuctionRegistration` DI-OVERLAY kurir dari `AuctionSettlement` (kalau
+ * pemenang sudah lunas) — bukan salah satu entity apa adanya.
+ */
+type WinnerInfo = (AuctionRegistration | AuctionSettlement) & {
+  courier_code?: string | null;
+  courier_service_name?: string | null;
+};
+
 const currencyFormatter = new Intl.NumberFormat('id-ID', {
   style: 'currency',
   currency: 'IDR',
@@ -74,7 +87,7 @@ export default function ListingDetailContent({ productId }: ListingDetailContent
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [winner, setWinner] = useState<AuctionRegistration | AuctionSettlement | null>(null);
+  const [winner, setWinner] = useState<WinnerInfo | null>(null);
   const [order, setOrder] = useState<Order | null>(null);
   const [buyerInfoLoading, setBuyerInfoLoading] = useState(false);
 
@@ -114,16 +127,25 @@ export default function ListingDetailContent({ productId }: ListingDetailContent
         ? apiClient<AuctionRegistrationMeResponse>(`/api/markets/${marketId}/products/${productId}/registrations/winner`).then(
             async (res) => {
               if (cancelled) return;
+              // Kurir/ongkir cuma hidup di settlement (dipilih saat pelunasan,
+              // bukan saat registrasi) — fetch settlement REGARDLESS supaya
+              // seller tetap lihat kurirnya, walau alamatnya dari registrasi.
+              const settlementRes = await apiClient<AuctionSettlementMeResponse>(
+                `/api/markets/${marketId}/products/${productId}/settlement/winner-for-seller`,
+              ).catch(() => null);
+              if (cancelled) return;
+
               if (res.registration) {
-                setWinner(res.registration);
+                setWinner({
+                  ...res.registration,
+                  courier_code: settlementRes?.settlement?.courier_code ?? null,
+                  courier_service_name: settlementRes?.settlement?.courier_service_name ?? null,
+                });
                 return;
               }
               // Tidak ada baris registrasi (Market requiresRegistration=false)
-              // — fallback ambil alamat kirim dari settlement.
-              const settlementRes = await apiClient<AuctionSettlementMeResponse>(
-                `/api/markets/${marketId}/products/${productId}/settlement/winner-for-seller`,
-              );
-              if (!cancelled) setWinner(settlementRes.settlement);
+              // — alamat DAN kurir sama-sama dari settlement.
+              setWinner(settlementRes?.settlement ?? null);
             },
           )
         : apiClient<OrderForSellerResponse>(`/api/markets/${marketId}/products/${productId}/order`).then((res) => {
@@ -202,9 +224,18 @@ export default function ListingDetailContent({ productId }: ListingDetailContent
             </span>
             <span className="text-xs text-zinc-500">{product.mode_jual === 'AUCTION' ? 'Lelang' : 'Beli Langsung'}</span>
           </div>
-          <p className="text-xl font-semibold text-[var(--brand-primary)]">{currencyFormatter.format(product.price)}</p>
+          <p className="text-xl font-semibold text-[var(--brand-primary)]">
+            {currencyFormatter.format(
+              product.mode_jual === 'AUCTION' && product.current_highest_bid != null
+                ? product.current_highest_bid
+                : product.price,
+            )}
+          </p>
           {product.mode_jual === 'AUCTION' && (
             <div className="space-y-1 text-sm text-zinc-600">
+              {product.current_highest_bid != null && (
+                <p>Harga pembukaan: {currencyFormatter.format(product.price)}</p>
+              )}
               <p>Buka lelang: {formatDateTime(product.auction_start_at)}</p>
               <p>Tutup lelang: {formatDateTime(product.auction_end_at)}</p>
               {product.min_increment != null && <p>Kelipatan tawar minimum: {currencyFormatter.format(product.min_increment)}</p>}

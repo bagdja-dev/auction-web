@@ -58,6 +58,9 @@ export interface Product {
   min_increment: number | null;
   auction_start_at: string | null;
   auction_end_at: string | null;
+  /** Nominal tawaran tertinggi saat ini (mode_jual='AUCTION') — `null` = belum ada tawaran sama sekali. */
+  current_highest_bid: number | null;
+  highest_bidder_id: string | null;
   stock: number;
   re_listed_from_id: string | null;
   /** Berat/dimensi untuk hitung ongkir — default kalau kosong: 250g, 30x30x5cm. */
@@ -293,6 +296,10 @@ export interface AuctionSettlement {
   address: string | null;
   destination_area_id: string | null;
   destination_area_name: string | null;
+  /** `null` cuma untuk settlement lama (dibuat sebelum ongkir wajib dipilih) — settlement baru selalu terisi, kedua mode requires_registration. */
+  courier_code: string | null;
+  courier_service_name: string | null;
+  shipping_cost: number;
   /** Cuma terisi di `GET .../settlements/:id` (relasi `product` di-load di sana). */
   product?: ProductMediaSummary;
 }

@@ -143,11 +143,9 @@ export default function WalletContent() {
               <p className="mt-1 text-2xl font-semibold text-[var(--brand-primary)]">
                 {currencyFormatter.format(balance.balance)}
               </p>
-              {balance.held_balance > 0 && (
-                <p className="mt-0.5 text-xs text-zinc-500">
-                  + {currencyFormatter.format(balance.held_balance)} tertahan di escrow
-                </p>
-              )}
+              <p className="mt-0.5 text-xs text-zinc-500">
+                + {currencyFormatter.format(balance.held_balance)} tertahan
+              </p>
             </>
           ) : (
             <p className="mt-1 text-sm text-zinc-400">Memuat…</p>

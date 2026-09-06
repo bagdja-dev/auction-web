@@ -20,6 +20,7 @@ import type {
   DepositPreview,
   PlaceBidResponse,
   RegisterAuctionPayload,
+  ShippingCostOption,
 } from '@/lib/types';
 
 export interface AuctionPanelProps {
@@ -118,12 +119,15 @@ function HighestBidSummary({
           ? currencyFormatter.format(highestBid)
           : `Belum ada tawaran (harga awal ${currencyFormatter.format(startingPrice)})`}
       </p>
-      {highestBid != null && highestBidderUsername && (
+      <div className="min-h-[1.25rem]">
+         {highestBid != null && highestBidderUsername && (
         <p className="text-xs text-zinc-500">
           oleh {highestBidderUsername}
           {isCurrentUserHighestBidder && ' (Anda)'}
         </p>
       )}
+      </div>
+     
     </div>
   );
 }
@@ -202,6 +206,7 @@ export function AuctionPanel({
           initialProductStatus={productStatus}
           highestBidderId={highestBidderId}
           requiresRegistration={requiresRegistration}
+          registration={registration}
           readOnly
         />
       </PanelShell>
@@ -287,6 +292,7 @@ export function AuctionPanel({
         initialProductStatus={productStatus}
         highestBidderId={highestBidderId}
         requiresRegistration={requiresRegistration}
+        registration={registration}
       />
     </PanelShell>
   );
@@ -582,6 +588,7 @@ function BiddingSection({
   highestBidderId,
   readOnly = false,
   requiresRegistration,
+  registration,
 }: {
   marketId: string;
   marketSlug: string;
@@ -597,6 +604,8 @@ function BiddingSection({
   readOnly?: boolean;
   /** `false` = tidak ada baris registrasi sama sekali — "Tebus Sekarang" perlu form alamat sendiri sebelum bisa submit. */
   requiresRegistration: boolean;
+  /** Registrasi buyer (kalau `requiresRegistration=true`) — dipakai ambil `destination_area_id` untuk hitung ongkir saat pelunasan, alamat sudah final sejak registrasi jadi tidak perlu form alamat lagi di sini. */
+  registration: AuctionRegistration | null;
 }) {
   const { user } = useAuth();
   const [highestBid, setHighestBid] = useState<number | null>(initialHighestBid);
@@ -710,6 +719,15 @@ function BiddingSection({
   const [settlementAddress, setSettlementAddress] = useState('');
   const [settlementDestinationArea, setSettlementDestinationArea] = useState<ShippingAreaSelection | null>(null);
 
+  // Kurir & ongkir WAJIB dipilih saat pelunasan di KEDUA mode
+  // requiresRegistration — dulu tidak pernah ditagih sama sekali (celah
+  // lama, baru diperbaiki 2026-09-07). Mode requiresRegistration=true tidak
+  // perlu form alamat (sudah final sejak registrasi), cuma perlu ini.
+  const [settlementCostOptions, setSettlementCostOptions] = useState<ShippingCostOption[] | null>(null);
+  const [settlementCostLoading, setSettlementCostLoading] = useState(false);
+  const [settlementCostError, setSettlementCostError] = useState<string | null>(null);
+  const [settlementCourier, setSettlementCourier] = useState<ShippingCostOption | null>(null);
+
   // Prefill alamat dari alamat toko buyer sendiri — pola sama `RegistrationForm`.
   const sellerAddress = useSellerAddressPrefill(marketId);
   useEffect(() => {
@@ -740,13 +758,57 @@ function BiddingSection({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isWinnerPersistent, marketId, productId]);
 
+  // Area tujuan buat hitung ongkir — requiresRegistration=true ambil dari
+  // registrasi (alamat sudah final sejak itu, tidak bisa diganti di sini),
+  // requiresRegistration=false dari form alamat lokal yang masih diisi buyer.
+  const settlementDestinationAreaId = requiresRegistration
+    ? (registration?.destination_area_id ?? null)
+    : settlementDestinationArea?.providerAreaId ?? null;
+
+  // Hitung ongkir real-time begitu area tujuan diketahui — pola sama `checkout-form.tsx`.
+  useEffect(() => {
+    if (!isWinnerPersistent || settlement?.checkout_url || settlement?.status === 'HELD') return;
+    if (!settlementDestinationAreaId) {
+      setSettlementCostOptions(null);
+      setSettlementCourier(null);
+      setSettlementCostError(null);
+      return;
+    }
+    let cancelled = false;
+    setSettlementCostLoading(true);
+    setSettlementCostError(null);
+    setSettlementCourier(null);
+    (async () => {
+      try {
+        const options = await apiClient<ShippingCostOption[]>(
+          `/api/markets/${marketId}/products/${productId}/shipping/cost`,
+          { method: 'POST', body: JSON.stringify({ destination_area_id: settlementDestinationAreaId }) },
+        );
+        if (cancelled) return;
+        setSettlementCostOptions(Array.isArray(options) ? options : []);
+      } catch (err) {
+        if (cancelled) return;
+        setSettlementCostOptions(null);
+        setSettlementCostError(err instanceof ApiError ? err.message : 'Gagal menghitung ongkir untuk tujuan ini.');
+      } finally {
+        if (!cancelled) setSettlementCostLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isWinnerPersistent, settlement, settlementDestinationAreaId, marketId, productId]);
+
   /**
    * Dipakai baik tombol di modal celebrasi (`winnerModal`) maupun panel
    * persisten di bawah — satu sumber logic. `requiresRegistration=false`
    * (tidak ada baris registrasi untuk diambil alamatnya) — sertakan alamat
-   * dari form lokal (`showAddressForm`) di body request.
+   * dari form lokal (`showAddressForm`) di body request. `courier_code`
+   * WAJIB di KEDUA mode (server hitung ulang ongkir, JANGAN percaya nominal
+   * `cost` dari client — lihat `AuctionSettlementService.createOrGet()`).
    */
   async function handleTebusSekarang() {
+    if (!settlementCourier) return;
     setSettlementActionLoading(true);
     setSettlementError(null);
     try {
@@ -754,8 +816,8 @@ function BiddingSection({
         `/api/markets/${marketId}/products/${productId}/settlement`,
         {
           method: 'POST',
-          body: JSON.stringify(
-            requiresRegistration
+          body: JSON.stringify({
+            ...(requiresRegistration
               ? {}
               : {
                   recipient_name: settlementRecipientName,
@@ -763,8 +825,10 @@ function BiddingSection({
                   address: settlementAddress,
                   destination_area_id: settlementDestinationArea?.providerAreaId,
                   destination_area_name: settlementDestinationArea?.name,
-                },
-          ),
+                }),
+            courier_code: settlementCourier.courierCode,
+            courier_service_name: settlementCourier.serviceName,
+          }),
         },
       );
       if (data.checkout_url) {
@@ -778,6 +842,56 @@ function BiddingSection({
     } finally {
       setSettlementActionLoading(false);
     }
+  }
+
+  /** Radio-list opsi kurir — pola sama `checkout-form.tsx`, dipakai di kedua mode requiresRegistration. */
+  function SettlementCourierPicker() {
+    if (!settlementDestinationAreaId) {
+      return <p className="text-xs text-zinc-400">Menunggu alamat tujuan untuk hitung ongkir…</p>;
+    }
+    if (settlementCostLoading) {
+      return <p className="text-xs text-zinc-400">Menghitung ongkir…</p>;
+    }
+    if (settlementCostError) {
+      return <p className="text-xs text-[var(--brand-error)]">{settlementCostError}</p>;
+    }
+    if (!settlementCostOptions || settlementCostOptions.length === 0) {
+      return <p className="text-xs text-zinc-400">Tidak ada kurir tersedia untuk tujuan ini.</p>;
+    }
+    return (
+      <div className="space-y-2">
+        {settlementCostOptions.map((opt) => {
+          const active =
+            settlementCourier?.courierCode === opt.courierCode && settlementCourier?.serviceName === opt.serviceName;
+          return (
+            <label
+              key={`${opt.courierCode}-${opt.serviceName}`}
+              className={`flex cursor-pointer items-center justify-between rounded-lg border px-3 py-2.5 text-sm transition ${
+                active ? 'border-[var(--brand-primary)] ring-1 ring-[var(--brand-primary)]' : 'border-zinc-300'
+              }`}
+            >
+              <span className="flex items-center gap-2">
+                <input
+                  type="radio"
+                  name="settlement_courier_option"
+                  checked={active}
+                  onChange={() => setSettlementCourier(opt)}
+                />
+                <span>
+                  <span className="font-semibold uppercase">{opt.courierCode}</span> {opt.serviceName}
+                  {(opt.etdMinDays || opt.etdMaxDays) && (
+                    <span className="ml-2 text-xs text-zinc-400">
+                      Estimasi {opt.etdMinDays ?? '?'}-{opt.etdMaxDays ?? '?'} hari
+                    </span>
+                  )}
+                </span>
+              </span>
+              <span className="font-semibold">{currencyFormatter.format(opt.cost)}</span>
+            </label>
+          );
+        })}
+      </div>
+    );
   }
 
   // Polling harga tertinggi + status produk (fetch publik, tanpa proxy) — STOP begitu lelang berakhir.
@@ -960,6 +1074,10 @@ function BiddingSection({
                   <label className="mb-1 block text-sm font-medium text-zinc-700">Alamat Tujuan</label>
                   <ShippingAreaAutocomplete value={settlementDestinationArea} onChange={setSettlementDestinationArea} />
                 </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-zinc-700">Kurir Pengiriman</label>
+                  <SettlementCourierPicker />
+                </div>
                 <button
                   type="button"
                   onClick={handleTebusSekarang}
@@ -968,7 +1086,8 @@ function BiddingSection({
                     !settlementRecipientName.trim() ||
                     !settlementPhone.trim() ||
                     !settlementAddress.trim() ||
-                    !settlementDestinationArea
+                    !settlementDestinationArea ||
+                    !settlementCourier
                   }
                   className="w-full rounded-lg bg-[var(--brand-primary)] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-[var(--brand-primary-hover)] disabled:opacity-50"
                 >
@@ -976,14 +1095,22 @@ function BiddingSection({
                 </button>
               </div>
             ) : (
-              <button
-                type="button"
-                onClick={handleTebusSekarang}
-                disabled={settlementActionLoading}
-                className="w-full rounded-lg bg-[var(--brand-primary)] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-[var(--brand-primary-hover)] disabled:opacity-50"
-              >
-                {settlementActionLoading ? 'Memproses…' : 'Tebus Sekarang'}
-              </button>
+              // requiresRegistration=true — alamat sudah final sejak
+              // registrasi, cuma perlu pilih kurir sebelum submit.
+              <div className="space-y-3 rounded-lg border border-zinc-200 bg-white p-3">
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-zinc-700">Kurir Pengiriman</label>
+                  <SettlementCourierPicker />
+                </div>
+                <button
+                  type="button"
+                  onClick={handleTebusSekarang}
+                  disabled={settlementActionLoading || !settlementCourier}
+                  className="w-full rounded-lg bg-[var(--brand-primary)] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-[var(--brand-primary-hover)] disabled:opacity-50"
+                >
+                  {settlementActionLoading ? 'Memproses…' : 'Tebus Sekarang'}
+                </button>
+              </div>
             )}
             {settlementError && <p className="text-sm text-[var(--brand-error)]">{settlementError}</p>}
           </div>
@@ -1091,21 +1218,19 @@ function BiddingSection({
                 <button
                   type="button"
                   onClick={() => {
-                    // requiresRegistration=false — belum ada alamat kirim
-                    // tersimpan sama sekali, tutup modal saja lalu isi lewat
-                    // form di panel persisten di bawah (satu tempat, tidak
-                    // dobel form di modal ini).
-                    if (requiresRegistration) {
-                      handleTebusSekarang();
-                    } else {
-                      setWinnerModal(null);
+                    // Kurir WAJIB dipilih dulu di KEDUA mode (tidak bisa
+                    // langsung submit dari modal ini) — tutup modal saja,
+                    // pilih kurir (+ isi alamat kalau requiresRegistration=false)
+                    // lewat panel persisten di bawah (satu tempat, tidak dobel
+                    // form/picker di modal ini).
+                    setWinnerModal(null);
+                    if (!requiresRegistration) {
                       setShowAddressForm(true);
                     }
                   }}
-                  disabled={settlementActionLoading}
-                  className="w-full rounded-lg bg-[var(--brand-primary)] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-[var(--brand-primary-hover)] disabled:opacity-50"
+                  className="w-full rounded-lg bg-[var(--brand-primary)] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-[var(--brand-primary-hover)]"
                 >
-                  {settlementActionLoading ? 'Memproses…' : 'Tebus Sekarang'}
+                  Pilih Kurir &amp; Tebus Sekarang
                 </button>
               )}
               <button

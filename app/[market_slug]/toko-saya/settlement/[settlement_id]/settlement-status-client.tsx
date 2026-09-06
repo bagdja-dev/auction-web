@@ -134,6 +134,13 @@ export function SettlementStatusClient({ linkBase, marketId, settlementId, statu
           <div className="space-y-1 text-sm text-zinc-600">
             <p>Harga final: {currencyFormatter.format(settlement.final_amount)}</p>
             <p>Deposit sudah dibayar: {currencyFormatter.format(settlement.deposit_amount)}</p>
+            {settlement.courier_code && (
+              <p>
+                Kurir: {settlement.courier_code.toUpperCase()}
+                {settlement.courier_service_name ? ` — ${settlement.courier_service_name}` : ''}
+              </p>
+            )}
+            <p>Ongkir: {currencyFormatter.format(settlement.shipping_cost)}</p>
           </div>
           {status === 'PENDING_PAYMENT' ? (
             <p className="pt-1 text-sm text-amber-700">

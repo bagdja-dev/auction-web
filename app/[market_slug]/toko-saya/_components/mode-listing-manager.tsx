@@ -307,8 +307,17 @@ export function ModeListingManager({ modeJual, title }: ModeListingManagerProps)
                           </span>
                         </div>
                         <p className="text-sm font-semibold text-[var(--brand-primary)]">
-                          {currencyFormatter.format(product.price)}
+                          {currencyFormatter.format(
+                            product.mode_jual === 'AUCTION' && product.current_highest_bid != null
+                              ? product.current_highest_bid
+                              : product.price,
+                          )}
                         </p>
+                        {product.mode_jual === 'AUCTION' && product.current_highest_bid != null && (
+                          <p className="text-xs text-zinc-500">
+                            Harga pembukaan: {currencyFormatter.format(product.price)}
+                          </p>
+                        )}
                         {hasFulfillment && (
                           <span className="w-fit rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-medium text-blue-700">
                             Progress pengiriman tersedia
