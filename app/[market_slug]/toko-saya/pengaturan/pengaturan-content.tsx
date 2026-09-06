@@ -9,7 +9,7 @@ import { useTokoSaya } from '../_components/toko-saya-context';
 import { PageTitle } from '../_components/page-title';
 
 export default function PengaturanContent() {
-  const { marketId, marketSlug, seller, refreshSeller } = useTokoSaya();
+  const { marketId, linkBase, seller, refreshSeller } = useTokoSaya();
 
   // Inisialisasi dari `seller?.shop_name` (bisa `null` — belum daftar toko,
   // polish 31 Agustus 2026) — hook TIDAK BOLEH dipanggil kondisional
@@ -26,7 +26,7 @@ export default function PengaturanContent() {
         <PageTitle>Pengaturan Toko</PageTitle>
         <p className="rounded-xl border border-zinc-200 bg-white p-6 text-sm text-zinc-500 shadow-sm">
           Anda belum punya toko di Market ini. Buat toko dulu lewat halaman{' '}
-          <Link href={`/${marketSlug}/toko-saya`} className="font-medium text-[var(--brand-primary)] hover:underline">
+          <Link href={`${linkBase}/toko-saya`} className="font-medium text-[var(--brand-primary)] hover:underline">
             Dashboard
           </Link>
           .

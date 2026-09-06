@@ -11,12 +11,12 @@ import { BackIcon } from './icons';
  * sidebar (tidak butuh tombol back terpisah).
  */
 export function PageTitle({ children }: { children: React.ReactNode }) {
-  const { marketSlug } = useTokoSaya();
+  const { linkBase } = useTokoSaya();
 
   return (
     <div className="flex items-center gap-2">
       <Link
-        href={`/${marketSlug}/toko-saya`}
+        href={`${linkBase}/toko-saya`}
         className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-700 md:hidden"
         aria-label="Kembali ke Dashboard"
       >

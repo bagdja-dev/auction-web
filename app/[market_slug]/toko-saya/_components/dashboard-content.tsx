@@ -27,7 +27,7 @@ const currencyFormatter = new Intl.NumberFormat('id-ID', {
  * biasa.
  */
 export default function DashboardContent() {
-  const { marketId, marketSlug, seller, registerSeller, registering, registerError } = useTokoSaya();
+  const { marketId, linkBase, seller, registerSeller, registering, registerError } = useTokoSaya();
 
   const [wallet, setWallet] = useState<WalletBalance | null>(null);
   const [walletError, setWalletError] = useState<string | null>(null);
@@ -128,7 +128,7 @@ export default function DashboardContent() {
             )}
           </div>
           <Link
-            href={`/${marketSlug}/toko-saya/wallet`}
+            href={`${linkBase}/toko-saya/wallet`}
             className="shrink-0 rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 transition hover:bg-zinc-50"
           >
             Detail Wallet
@@ -155,21 +155,21 @@ export default function DashboardContent() {
       {/* Grid ikon menu — cuma tampil di mobile (<md), desktop sudah punya sidebar */}
       <section className="grid grid-cols-2 gap-3 md:hidden">
         <Link
-          href={`/${marketSlug}/toko-saya/lelang`}
+          href={`${linkBase}/toko-saya/lelang`}
           className="flex flex-col items-center gap-2 rounded-xl border border-zinc-200 bg-white p-5 text-center shadow-sm transition hover:border-[var(--brand-primary)]"
         >
           <AuctionIcon className="h-6 w-6 text-[var(--brand-primary)]" />
           <span className="text-sm font-medium text-zinc-700">Lelang</span>
         </Link>
         <Link
-          href={`/${marketSlug}/toko-saya/beli-langsung`}
+          href={`${linkBase}/toko-saya/beli-langsung`}
           className="flex flex-col items-center gap-2 rounded-xl border border-zinc-200 bg-white p-5 text-center shadow-sm transition hover:border-[var(--brand-primary)]"
         >
           <ProductIcon className="h-6 w-6 text-[var(--brand-primary)]" />
           <span className="text-sm font-medium text-zinc-700">Beli Langsung</span>
         </Link>
         <Link
-          href={`/${marketSlug}/toko-saya/pengaturan`}
+          href={`${linkBase}/toko-saya/pengaturan`}
           className="flex flex-col items-center gap-2 rounded-xl border border-zinc-200 bg-white p-5 text-center shadow-sm transition hover:border-[var(--brand-primary)]"
         >
           <SettingsIcon className="h-6 w-6 text-[var(--brand-primary)]" />

@@ -24,6 +24,8 @@ import type {
 export interface AuctionPanelProps {
   marketId: string;
   marketSlug: string;
+  /** Base path untuk link internal — `''` di subdomain/custom domain, `/{slug}` di path-based (local dev). Lihat `lib/tenant-link-base.ts`. */
+  linkBase: string;
   productId: string;
   productSlug: string;
   startingPrice: number;
@@ -116,6 +118,7 @@ function HighestBidSummary({
 export function AuctionPanel({
   marketId,
   marketSlug,
+  linkBase,
   productId,
   productSlug,
   startingPrice,
@@ -129,7 +132,7 @@ export function AuctionPanel({
   readOnly = false,
 }: AuctionPanelProps) {
   const { isLoggedIn, loading: authLoading } = useAuth();
-  const loginHref = `/auth/login?next=${encodeURIComponent(`/${marketSlug}/products/${productSlug}`)}`;
+  const loginHref = `/auth/login?next=${encodeURIComponent(`${linkBase}/products/${productSlug}`)}`;
 
   const [registration, setRegistration] = useState<AuctionRegistration | null>(null);
   const [registrationChecked, setRegistrationChecked] = useState(false);

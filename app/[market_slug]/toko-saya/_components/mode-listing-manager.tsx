@@ -61,7 +61,7 @@ interface ModeListingManagerProps {
  * card yang sempit.
  */
 export function ModeListingManager({ modeJual, title }: ModeListingManagerProps) {
-  const { marketId, marketSlug, seller } = useTokoSaya();
+  const { marketId, linkBase, seller } = useTokoSaya();
 
   const [products, setProducts] = useState<Product[]>([]);
   const [fulfillments, setFulfillments] = useState<ProductFulfillment[]>([]);
@@ -206,7 +206,7 @@ export function ModeListingManager({ modeJual, title }: ModeListingManagerProps)
         <PageTitle>{title}</PageTitle>
         <p className="rounded-xl border border-zinc-200 bg-white p-6 text-sm text-zinc-500 shadow-sm">
           Anda belum punya toko di Market ini. Buat toko dulu lewat halaman{' '}
-          <Link href={`/${marketSlug}/toko-saya`} className="font-medium text-[var(--brand-primary)] hover:underline">
+          <Link href={`${linkBase}/toko-saya`} className="font-medium text-[var(--brand-primary)] hover:underline">
             Dashboard
           </Link>
           .
@@ -278,7 +278,7 @@ export function ModeListingManager({ modeJual, title }: ModeListingManagerProps)
                   const cover = product.images?.[0] ?? null;
                   const isDraft = product.status === 'draft';
                   const hasFulfillment = fulfillmentByProduct.has(product.id);
-                  const detailHref = `/${marketSlug}/toko-saya/listing/${product.id}`;
+                  const detailHref = `${linkBase}/toko-saya/listing/${product.id}`;
                   return (
                     <div
                       key={product.id}
@@ -351,7 +351,7 @@ export function ModeListingManager({ modeJual, title }: ModeListingManagerProps)
                           {product.status === 'published' && (
                             <>
                               <Link
-                                href={`/${marketSlug}/products/${product.slug}?view=owner`}
+                                href={`${linkBase}/products/${product.slug}?view=owner`}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="rounded-md border border-zinc-300 px-2.5 py-1 text-xs font-medium text-zinc-700 transition hover:bg-zinc-50"

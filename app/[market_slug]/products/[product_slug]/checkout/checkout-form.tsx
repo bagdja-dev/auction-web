@@ -8,7 +8,8 @@ import { ApiError, apiClient } from '@/lib/proxy-client';
 import type { CheckoutPayload, Order, ShippingCostOption } from '@/lib/types';
 
 interface CheckoutFormProps {
-  marketSlug: string;
+  /** Base path untuk link internal — `''` di subdomain/custom domain, `/{slug}` di path-based (local dev). Lihat `lib/tenant-link-base.ts`. */
+  linkBase: string;
   marketId: string;
   productId: string;
   productName: string;
@@ -37,7 +38,7 @@ const EMPTY_FORM: FormState = { recipientName: '', phone: '', address: '' };
  * terpilih. Sukses -> redirect ke Bagdja Pay (`order.checkout_url`), makanya
  * pakai `window.location.href`, BUKAN `next/navigation` router (keluar domain).
  */
-export function CheckoutForm({ marketSlug, marketId, productId, productName, price }: CheckoutFormProps) {
+export function CheckoutForm({ linkBase, marketId, productId, productName, price }: CheckoutFormProps) {
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [destinationArea, setDestinationArea] = useState<ShippingAreaSelection | null>(null);
   const [costOptions, setCostOptions] = useState<ShippingCostOption[] | null>(null);
@@ -233,7 +234,7 @@ export function CheckoutForm({ marketSlug, marketId, productId, productName, pri
 
         <div className="flex items-center justify-end gap-3 pt-1">
           <Link
-            href={`/${marketSlug}`}
+            href={linkBase || '/'}
             className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-600 transition hover:bg-zinc-50"
           >
             Batal

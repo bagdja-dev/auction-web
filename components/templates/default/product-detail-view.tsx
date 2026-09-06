@@ -14,6 +14,8 @@ import { AuctionPanel } from '@/app/[market_slug]/products/[product_slug]/auctio
 
 export interface ProductDetailViewProps {
   marketSlug: string;
+  /** Base path untuk link internal — `''` di subdomain/custom domain, `/{slug}` di path-based (local dev). Lihat `lib/tenant-link-base.ts`. */
+  linkBase: string;
   marketId: string;
   marketName: string;
   product: ProductPublic;
@@ -60,6 +62,7 @@ function formatDateTime(iso: string | null): string {
  */
 export default function ProductDetailView({
   marketSlug,
+  linkBase,
   marketId,
   marketName,
   product,
@@ -110,20 +113,20 @@ export default function ProductDetailView({
       style={mobileActionPanelSpace != null ? { paddingBottom: Math.max(160, mobileActionPanelSpace + 24) } : undefined}
     >
       <MarketAppBar
-        marketSlug={marketSlug}
+        linkBase={linkBase}
         isLoggedIn={isLoggedIn}
         displayName={displayName}
         left={
           cameFromDashboard ? (
             <Link
-              href={`/${marketSlug}/toko-saya`}
+              href={`${linkBase}/toko-saya`}
               className="flex items-center gap-1.5 text-sm font-medium text-zinc-600 hover:text-[var(--brand-primary)]"
             >
               ← Kembali ke Dashboard
             </Link>
           ) : (
             <Link
-              href={`/${marketSlug}`}
+              href={linkBase || '/'}
               className="flex items-center gap-1.5 text-sm font-medium text-zinc-600 hover:text-[var(--brand-primary)]"
             >
               ← Kembali ke {marketName}
@@ -214,6 +217,7 @@ export default function ProductDetailView({
               <AuctionPanel
                 marketId={marketId}
                 marketSlug={marketSlug}
+                linkBase={linkBase}
                 productId={product.id}
                 productSlug={product.slug}
                 startingPrice={product.price}
@@ -232,7 +236,7 @@ export default function ProductDetailView({
               </span>
             ) : product.status === 'published' ? (
               <Link
-                href={`/${marketSlug}/products/${product.slug}/checkout`}
+                href={`${linkBase}/products/${product.slug}/checkout`}
                 className="block w-full rounded-lg bg-[var(--brand-primary)] px-4 py-3 text-center text-sm font-medium text-white transition hover:bg-[var(--brand-primary-hover)] md:mt-2"
               >
                 Beli Sekarang

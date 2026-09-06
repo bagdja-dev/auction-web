@@ -24,11 +24,12 @@ function formatDate(iso: string | null): string {
  * tanpa JS tambahan.
  */
 export default function ProductCardGrand({
-  marketSlug,
+  linkBase,
   product,
   market,
 }: {
-  marketSlug: string;
+  /** Base path untuk link internal — `''` di subdomain/custom domain, `/{slug}` di path-based (local dev). Lihat `lib/tenant-link-base.ts`. */
+  linkBase: string;
   product: ProductPublic;
   market: Market;
 }) {
@@ -37,7 +38,7 @@ export default function ProductCardGrand({
   const statusLabel = getCatalogStatusLabel(product, market);
 
   return (
-    <Link href={`/${marketSlug}/products/${product.slug}`} className="group mb-4 block break-inside-avoid">
+    <Link href={`${linkBase}/products/${product.slug}`} className="group mb-4 block break-inside-avoid">
       <div className="relative overflow-hidden rounded-2xl bg-zinc-100 shadow-sm transition group-hover:shadow-xl">
         {cover ? (
           // eslint-disable-next-line @next/next/no-img-element

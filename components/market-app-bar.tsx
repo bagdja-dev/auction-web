@@ -22,7 +22,8 @@ import { AccountBadge } from '@/components/account-badge';
  * (`product-detail-view.tsx`).
  */
 export interface MarketAppBarProps {
-  marketSlug: string;
+  /** Base path untuk link internal — `''` di subdomain/custom domain, `/{slug}` di path-based (local dev). Lihat `lib/tenant-link-base.ts`. */
+  linkBase: string;
   isLoggedIn: boolean;
   /** Username/email user login — diteruskan apa adanya ke `AccountBadge`. */
   displayName?: string;
@@ -32,7 +33,7 @@ export interface MarketAppBarProps {
 }
 
 export function MarketAppBar({
-  marketSlug,
+  linkBase,
   isLoggedIn,
   displayName,
   left,
@@ -43,7 +44,7 @@ export function MarketAppBar({
       className={`sticky top-0 z-10 mb-8 flex flex-wrap items-center justify-between gap-4 bg-white pb-6 pt-4 ${borderClassName}`}
     >
       {left}
-      <AccountBadge marketSlug={marketSlug} isLoggedIn={isLoggedIn} displayName={displayName} />
+      <AccountBadge linkBase={linkBase} isLoggedIn={isLoggedIn} displayName={displayName} />
     </header>
   );
 }

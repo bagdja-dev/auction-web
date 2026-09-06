@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation';
 
 import { getMarketBySlug } from '@/lib/api-client';
+import { resolveTenantLinkBase } from '@/lib/tenant-link-base';
 import { OrderStatusClient } from './order-status-client';
 
 interface OrderStatusPageProps {
@@ -31,7 +32,7 @@ export default async function OrderStatusPage({ params, searchParams }: OrderSta
   return (
     <div className="mx-auto max-w-2xl">
       <OrderStatusClient
-        marketSlug={params.market_slug}
+        linkBase={resolveTenantLinkBase(params.market_slug)}
         marketId={market.id}
         orderId={params.order_id}
         statusHint={parseStatusHint(searchParams.status)}

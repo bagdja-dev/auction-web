@@ -7,7 +7,8 @@ import ProductCard from './product-card';
 
 export interface CatalogViewProps {
   market: Market;
-  marketSlug: string;
+  /** Base path untuk link internal — `''` di subdomain/custom domain, `/{slug}` di path-based (local dev). Lihat `lib/tenant-link-base.ts`. */
+  linkBase: string;
   products: PaginatedResult<ProductPublic>;
   page: number;
   modeJual: ProductModeJual | undefined;
@@ -24,7 +25,7 @@ export interface CatalogViewProps {
  */
 export default function CatalogView({
   market,
-  marketSlug,
+  linkBase,
   products,
   page,
   modeJual,
@@ -37,7 +38,7 @@ export default function CatalogView({
   return (
     <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
       <MarketAppBar
-        marketSlug={marketSlug}
+        linkBase={linkBase}
         isLoggedIn={isLoggedIn}
         displayName={displayName}
         left={<h1 className="text-2xl font-semibold text-[var(--brand-primary)]">{market.name}</h1>}
@@ -45,7 +46,7 @@ export default function CatalogView({
 
       <div className="mb-6 flex items-center justify-between gap-4">
         <p className="text-sm text-zinc-500">{total} produk</p>
-        <ModeFilter marketSlug={marketSlug} />
+        <ModeFilter linkBase={linkBase} />
       </div>
 
       {items.length === 0 ? (
@@ -55,7 +56,7 @@ export default function CatalogView({
       ) : (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
           {items.map((product) => (
-            <ProductCard key={product.id} marketSlug={marketSlug} product={product} market={market} />
+            <ProductCard key={product.id} linkBase={linkBase} product={product} market={market} />
           ))}
         </div>
       )}
@@ -70,7 +71,7 @@ export default function CatalogView({
             return (
               <Link
                 key={p}
-                href={`/${marketSlug}${qs ? `?${qs}` : ''}`}
+                href={`${linkBase}${qs ? `?${qs}` : ''}`}
                 className={`rounded-md px-3 py-1.5 ${
                   p === page
                     ? 'bg-[var(--brand-primary)] text-white'

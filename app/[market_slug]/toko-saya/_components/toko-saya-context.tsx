@@ -6,7 +6,8 @@ import type { Seller } from '@/lib/types';
 
 export interface TokoSayaContextValue {
   marketId: string;
-  marketSlug: string;
+  /** Base path untuk link internal — `''` di subdomain/custom domain, `/{slug}` di path-based (local dev). Lihat `lib/tenant-link-base.ts`. */
+  linkBase: string;
   marketName: string;
   /**
    * `null` = user login tapi BELUM daftar toko di Market ini (polish 31

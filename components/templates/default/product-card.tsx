@@ -21,11 +21,12 @@ function formatDateTime(iso: string | null): string {
 }
 
 export default function ProductCard({
-  marketSlug,
+  linkBase,
   product,
   market,
 }: {
-  marketSlug: string;
+  /** Base path untuk link internal — `''` di subdomain/custom domain, `/{slug}` di path-based (local dev). Lihat `lib/tenant-link-base.ts`. */
+  linkBase: string;
   product: ProductPublic;
   market: Market;
 }) {
@@ -35,7 +36,7 @@ export default function ProductCard({
 
   return (
     <Link
-      href={`/${marketSlug}/products/${product.slug}`}
+      href={`${linkBase}/products/${product.slug}`}
       className="group flex flex-col overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm transition hover:border-[var(--brand-primary)] hover:shadow-md"
     >
       <div className="relative aspect-square w-full bg-zinc-100">

@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation';
 
 import { getMarketBySlug } from '@/lib/api-client';
+import { resolveTenantLinkBase } from '@/lib/tenant-link-base';
 import { SettlementStatusClient } from './settlement-status-client';
 
 interface SettlementStatusPageProps {
@@ -28,7 +29,7 @@ export default async function SettlementStatusPage({ params, searchParams }: Set
   return (
     <div className="mx-auto max-w-2xl">
       <SettlementStatusClient
-        marketSlug={params.market_slug}
+        linkBase={resolveTenantLinkBase(params.market_slug)}
         marketId={market.id}
         settlementId={params.settlement_id}
         statusHint={parseStatusHint(searchParams.status)}

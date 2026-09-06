@@ -3,6 +3,7 @@ import { notFound, redirect } from 'next/navigation';
 
 import { getMarketBySlug, getMarketProductBySlug } from '@/lib/api-client';
 import { getSession } from '@/lib/session';
+import { resolveTenantLinkBase } from '@/lib/tenant-link-base';
 import { CheckoutForm } from './checkout-form';
 
 interface CheckoutPageProps {
@@ -23,7 +24,7 @@ export async function generateMetadata({ params }: CheckoutPageProps): Promise<M
 export default async function CheckoutPage({ params }: CheckoutPageProps) {
   const { token } = await getSession();
   if (!token) {
-    const currentPath = `/${params.market_slug}/products/${params.product_slug}/checkout`;
+    const currentPath = `${resolveTenantLinkBase(params.market_slug)}/products/${params.product_slug}/checkout`;
     redirect(`/auth/login?next=${encodeURIComponent(currentPath)}`);
   }
 
@@ -38,7 +39,7 @@ export default async function CheckoutPage({ params }: CheckoutPageProps) {
     <main className="mx-auto max-w-2xl px-4 py-8 sm:px-6">
       <h1 className="mb-6 text-2xl font-semibold text-zinc-900">Checkout</h1>
       <CheckoutForm
-        marketSlug={params.market_slug}
+        linkBase={resolveTenantLinkBase(params.market_slug)}
         marketId={market.id}
         productId={product.id}
         productName={product.name}

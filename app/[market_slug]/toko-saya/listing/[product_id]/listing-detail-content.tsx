@@ -65,7 +65,7 @@ function formatDateTime(iso: string | null): string {
  * (DIRECT_SELL) — cuma dipanggil kalau produk sudah `sold`.
  */
 export default function ListingDetailContent({ productId }: ListingDetailContentProps) {
-  const { marketId, marketSlug, seller } = useTokoSaya();
+  const { marketId, linkBase, seller } = useTokoSaya();
 
   const [product, setProduct] = useState<Product | null>(null);
   const [fulfillment, setFulfillment] = useState<ProductFulfillment | null>(null);
@@ -131,9 +131,9 @@ export default function ListingDetailContent({ productId }: ListingDetailContent
 
   const backHref = product
     ? product.mode_jual === 'AUCTION'
-      ? `/${marketSlug}/toko-saya/lelang`
-      : `/${marketSlug}/toko-saya/beli-langsung`
-    : `/${marketSlug}/toko-saya`;
+      ? `${linkBase}/toko-saya/lelang`
+      : `${linkBase}/toko-saya/beli-langsung`
+    : `${linkBase}/toko-saya`;
 
   if (!seller) {
     return (

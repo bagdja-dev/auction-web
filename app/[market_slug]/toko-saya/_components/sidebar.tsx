@@ -4,7 +4,8 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 interface SidebarProps {
-  marketSlug: string;
+  /** Base path untuk link internal — `''` di subdomain/custom domain, `/{slug}` di path-based (local dev). Lihat `lib/tenant-link-base.ts`. */
+  linkBase: string;
   collapsed: boolean;
   onToggleCollapsed: () => void;
 }
@@ -14,9 +15,9 @@ interface SidebarProps {
  * Di mobile, navigasi antar halaman lewat grid ikon menu di Dashboard
  * (lihat `page.tsx`), bukan sidebar ini.
  */
-export function TokoSayaSidebar({ marketSlug, collapsed, onToggleCollapsed }: SidebarProps) {
+export function TokoSayaSidebar({ linkBase, collapsed, onToggleCollapsed }: SidebarProps) {
   const pathname = usePathname();
-  const base = `/${marketSlug}/toko-saya`;
+  const base = `${linkBase}/toko-saya`;
   const items = [
     { href: base, label: 'Dashboard' },
     { href: `${base}/lelang`, label: 'Lelang' },

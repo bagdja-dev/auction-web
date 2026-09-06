@@ -56,10 +56,10 @@ const currencyFormatter = new Intl.NumberFormat('id-ID', {
   maximumFractionDigits: 0,
 });
 
-function ctaFor(row: PurchaseRow, marketSlug: string): { label: string; href: string } | null {
+function ctaFor(row: PurchaseRow, linkBase: string): { label: string; href: string } | null {
   // `?from=dashboard` dibaca `product-detail-view.tsx` supaya halaman detail
   // produk yang dibuka dari sini punya tombol "Kembali ke Dashboard".
-  const productHref = `/${marketSlug}/products/${row.product_slug}?from=dashboard`;
+  const productHref = `${linkBase}/products/${row.product_slug}?from=dashboard`;
 
   switch (row.category) {
     case 'AWAITING_DEPOSIT':
@@ -69,21 +69,21 @@ function ctaFor(row: PurchaseRow, marketSlug: string): { label: string; href: st
     case 'AWAITING_PAYMENT':
       return {
         label: row.checkout_url ? 'Lanjutkan Pembayaran' : 'Lihat Pesanan',
-        href: row.checkout_url ?? `/${marketSlug}/toko-saya/order/${row.order_id}`,
+        href: row.checkout_url ?? `${linkBase}/toko-saya/order/${row.order_id}`,
       };
     case 'AWAITING_SETTLEMENT':
       return {
         label: row.checkout_url ? 'Lanjutkan Pelunasan' : 'Lihat Status',
-        href: row.checkout_url ?? `/${marketSlug}/toko-saya/settlement/${row.settlement_id}`,
+        href: row.checkout_url ?? `${linkBase}/toko-saya/settlement/${row.settlement_id}`,
       };
     case 'IN_FULFILLMENT':
     case 'COMPLETED':
       return {
         label: row.category === 'COMPLETED' ? 'Lihat Detail' : 'Lihat Progress Pengiriman',
         href: row.settlement_id
-          ? `/${marketSlug}/toko-saya/settlement/${row.settlement_id}`
+          ? `${linkBase}/toko-saya/settlement/${row.settlement_id}`
           : row.order_id
-            ? `/${marketSlug}/toko-saya/order/${row.order_id}`
+            ? `${linkBase}/toko-saya/order/${row.order_id}`
             : productHref,
       };
     case 'FAILED':
@@ -106,7 +106,7 @@ function ctaFor(row: PurchaseRow, marketSlug: string): { label: string; href: st
  * `row.mode_jual === modeJual` dilakukan di sini.
  */
 export function ModePurchasesList({ modeJual, title }: ModePurchasesListProps) {
-  const { marketId, marketSlug } = useTokoSaya();
+  const { marketId, linkBase } = useTokoSaya();
 
   const [rows, setRows] = useState<PurchaseRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -172,7 +172,7 @@ export function ModePurchasesList({ modeJual, title }: ModePurchasesListProps) {
           ) : (
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
               {filteredRows.map((row) => {
-                const cta = ctaFor(row, marketSlug);
+                const cta = ctaFor(row, linkBase);
                 return (
                   <div
                     key={row.product_id}

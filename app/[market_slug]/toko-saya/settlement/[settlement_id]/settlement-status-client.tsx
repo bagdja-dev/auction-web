@@ -10,7 +10,8 @@ import type { AuctionSettlement } from '@/lib/types';
 import { PageTitle } from '../../_components/page-title';
 
 interface SettlementStatusClientProps {
-  marketSlug: string;
+  /** Base path untuk link internal — `''` di subdomain/custom domain, `/{slug}` di path-based (local dev). Lihat `lib/tenant-link-base.ts`. */
+  linkBase: string;
   marketId: string;
   settlementId: string;
   /** Dari `?status=success|failed` (query redirect Bagdja Pay) — cuma indikator awal sebelum polling pertama selesai. */
@@ -31,7 +32,7 @@ const currencyFormatter = new Intl.NumberFormat('id-ID', {
  * `PENDING_PAYMENT` (endpoint backend sync dari escrow tiap dipanggil —
  * bukan webhook). Berhenti begitu jadi `HELD`.
  */
-export function SettlementStatusClient({ marketSlug, marketId, settlementId, statusHint }: SettlementStatusClientProps) {
+export function SettlementStatusClient({ linkBase, marketId, settlementId, statusHint }: SettlementStatusClientProps) {
   const [settlement, setSettlement] = useState<AuctionSettlement | null>(null);
   const [error, setError] = useState<string | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -129,7 +130,7 @@ export function SettlementStatusClient({ marketSlug, marketId, settlementId, sta
         )}
         {settlement && <FulfillmentProgress marketId={marketId} productId={settlement.product_id} role="buyer" />}
         <Link
-          href={`/${marketSlug}/toko-saya`}
+          href={`${linkBase}/toko-saya`}
           className="inline-block text-sm text-[var(--brand-primary)] hover:underline"
         >
           ← Kembali ke Dashboard

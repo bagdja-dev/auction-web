@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import { getMarketBySlug, getMarketProducts, type ProductModeJual } from '@/lib/api-client';
 import { getSession } from '@/lib/session';
 import { resolveTemplate } from '@/components/templates/registry';
+import { resolveTenantLinkBase } from '@/lib/tenant-link-base';
 
 export const revalidate = 60;
 
@@ -37,7 +38,7 @@ export default async function MarketCatalogPage({ params, searchParams }: Market
   return (
     <CatalogView
       market={market}
-      marketSlug={params.market_slug}
+      linkBase={resolveTenantLinkBase(params.market_slug)}
       products={products}
       page={page}
       modeJual={modeJual}

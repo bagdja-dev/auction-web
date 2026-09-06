@@ -8,7 +8,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
  * (`?mode_jual=AUCTION`) supaya hasil filter shareable/bookmarkable. Server
  * Component `page.tsx` yang membaca `searchParams` untuk query API.
  */
-export default function ModeFilter({ marketSlug }: { marketSlug: string }) {
+export default function ModeFilter({ linkBase }: { linkBase: string }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const current = searchParams.get('mode_jual') ?? '';
@@ -21,7 +21,7 @@ export default function ModeFilter({ marketSlug }: { marketSlug: string }) {
       params.delete('mode_jual');
     }
     const qs = params.toString();
-    router.push(`/${marketSlug}${qs ? `?${qs}` : ''}`);
+    router.push(`${linkBase}${qs ? `?${qs}` : ''}`);
   }
 
   return (

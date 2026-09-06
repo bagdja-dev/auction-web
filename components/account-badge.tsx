@@ -22,19 +22,20 @@ import { useState } from 'react';
  * toggle dropdown, bukan karena butuh resolve identitas sendiri.
  */
 export interface AccountBadgeProps {
-  marketSlug: string;
+  /** Base path untuk link internal — `''` di subdomain/custom domain, `/{slug}` di path-based (local dev). Lihat `lib/tenant-link-base.ts`. */
+  linkBase: string;
   isLoggedIn: boolean;
   /** Username/email user login — `undefined` = tampilkan fallback "Akun". */
   displayName?: string;
 }
 
-export function AccountBadge({ marketSlug, isLoggedIn, displayName }: AccountBadgeProps) {
+export function AccountBadge({ linkBase, isLoggedIn, displayName }: AccountBadgeProps) {
   const [menuOpen, setMenuOpen] = useState(false);
 
   if (!isLoggedIn) {
     return (
       <Link
-        href={`/auth/login?next=${encodeURIComponent(`/${marketSlug}/toko-saya`)}`}
+        href={`/auth/login?next=${encodeURIComponent(`${linkBase}/toko-saya`)}`}
         className="rounded-lg border border-[var(--brand-primary)] px-4 py-2 text-sm font-medium text-[var(--brand-primary)] transition hover:bg-zinc-50"
       >
         Masuk
@@ -63,7 +64,7 @@ export function AccountBadge({ marketSlug, isLoggedIn, displayName }: AccountBad
           <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} aria-hidden="true" />
           <div className="absolute right-0 z-20 mt-2 w-44 rounded-lg border border-zinc-200 bg-white py-1 shadow-lg">
             <Link
-              href={`/${marketSlug}/toko-saya`}
+              href={`${linkBase}/toko-saya`}
               onClick={() => setMenuOpen(false)}
               className="block px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-50"
             >

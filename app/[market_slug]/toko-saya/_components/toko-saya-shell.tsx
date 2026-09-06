@@ -13,7 +13,8 @@ const COLLAPSE_STORAGE_KEY = 'am_toko_saya_sidebar_collapsed';
 
 interface TokoSayaShellProps {
   marketId: string;
-  marketSlug: string;
+  /** Base path untuk link internal — `''` di subdomain/custom domain, `/{slug}` di path-based (local dev). Lihat `lib/tenant-link-base.ts`. */
+  linkBase: string;
   marketName: string;
   children: React.ReactNode;
 }
@@ -31,7 +32,7 @@ interface TokoSayaShellProps {
  * - <md: tanpa sidebar — navigasi antar halaman lewat grid ikon menu di
  *   Dashboard (lihat page.tsx), children dirender penuh di bawah topbar.
  */
-export function TokoSayaShell({ marketId, marketSlug, marketName, children }: TokoSayaShellProps) {
+export function TokoSayaShell({ marketId, linkBase, marketName, children }: TokoSayaShellProps) {
   const { user } = useAuth();
 
   const [loading, setLoading] = useState(true);
@@ -103,7 +104,7 @@ export function TokoSayaShell({ marketId, marketSlug, marketName, children }: To
 
   const topbar = (
     <header className="z-20 flex h-14 shrink-0 items-center justify-between border-b border-zinc-200 bg-white px-4 sm:px-6">
-      <Link href={`/${marketSlug}`} className="flex items-center gap-2 text-sm text-zinc-600 hover:text-[var(--brand-primary)]">
+      <Link href={linkBase || '/'} className="flex items-center gap-2 text-sm text-zinc-600 hover:text-[var(--brand-primary)]">
         <span aria-hidden>←</span>
         Kembali ke Market
       </Link>
@@ -142,12 +143,12 @@ export function TokoSayaShell({ marketId, marketSlug, marketName, children }: To
 
   return (
     <TokoSayaProvider
-      value={{ marketId, marketSlug, marketName, seller, refreshSeller: loadSellerStatus, registerSeller, registering, registerError }}
+      value={{ marketId, linkBase, marketName, seller, refreshSeller: loadSellerStatus, registerSeller, registering, registerError }}
     >
       <div className="flex h-screen flex-col overflow-hidden bg-zinc-50">
         {topbar}
         <div className="flex flex-1 overflow-hidden">
-          <TokoSayaSidebar marketSlug={marketSlug} collapsed={collapsed} onToggleCollapsed={toggleCollapsed} />
+          <TokoSayaSidebar linkBase={linkBase} collapsed={collapsed} onToggleCollapsed={toggleCollapsed} />
           <main className="min-w-0 flex-1 overflow-y-auto px-4 py-6 sm:px-6 md:py-8">
             {loadError && (
               <p className="mb-4 rounded-lg border border-[var(--brand-error)] bg-red-50 px-3 py-2 text-sm text-[var(--brand-error)]">

@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation';
 import type { ReactNode } from 'react';
 
 import { getMarketBySlug } from '@/lib/api-client';
+import { resolveTenantLinkBase } from '@/lib/tenant-link-base';
 import { TokoSayaShell } from './_components/toko-saya-shell';
 
 interface TokoSayaLayoutProps {
@@ -25,7 +26,7 @@ export default async function TokoSayaLayout({ children, params }: TokoSayaLayou
   if (!market) notFound();
 
   return (
-    <TokoSayaShell marketId={market.id} marketSlug={params.market_slug} marketName={market.name}>
+    <TokoSayaShell marketId={market.id} linkBase={resolveTenantLinkBase(params.market_slug)} marketName={market.name}>
       {children}
     </TokoSayaShell>
   );

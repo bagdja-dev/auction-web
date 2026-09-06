@@ -10,7 +10,8 @@ import type { Order } from '@/lib/types';
 import { PageTitle } from '../../_components/page-title';
 
 interface OrderStatusClientProps {
-  marketSlug: string;
+  /** Base path untuk link internal — `''` di subdomain/custom domain, `/{slug}` di path-based (local dev). Lihat `lib/tenant-link-base.ts`. */
+  linkBase: string;
   marketId: string;
   orderId: string;
   /** Dari `?status=success|failed` (query redirect Bagdja Pay) — cuma indikator awal sebelum polling pertama selesai. */
@@ -30,7 +31,7 @@ const currencyFormatter = new Intl.NumberFormat('id-ID', {
  * status masih `PENDING_PAYMENT` (endpoint backend sync dari escrow tiap
  * dipanggil — bukan webhook). Berhenti begitu jadi `HELD`/`FAILED`.
  */
-export function OrderStatusClient({ marketSlug, marketId, orderId, statusHint }: OrderStatusClientProps) {
+export function OrderStatusClient({ linkBase, marketId, orderId, statusHint }: OrderStatusClientProps) {
   const [order, setOrder] = useState<Order | null>(null);
   const [error, setError] = useState<string | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -140,7 +141,7 @@ export function OrderStatusClient({ marketSlug, marketId, orderId, statusHint }:
         )}
         {order && <FulfillmentProgress marketId={marketId} productId={order.product_id} role="buyer" />}
         <Link
-          href={`/${marketSlug}/toko-saya`}
+          href={`${linkBase}/toko-saya`}
           className="inline-block text-sm text-[var(--brand-primary)] hover:underline"
         >
           ← Kembali ke Dashboard
@@ -156,7 +157,7 @@ export function OrderStatusClient({ marketSlug, marketId, orderId, statusHint }:
           <p className="mt-1 text-sm text-red-700">Silakan coba lagi dari halaman produk.</p>
         </div>
         <Link
-          href={`/${marketSlug}/toko-saya`}
+          href={`${linkBase}/toko-saya`}
           className="inline-block text-sm text-[var(--brand-primary)] hover:underline"
         >
           ← Kembali ke Dashboard

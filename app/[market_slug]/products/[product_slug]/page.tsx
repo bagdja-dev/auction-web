@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 
 import { getMarketBySlug, getMarketProductBySlug } from '@/lib/api-client';
 import { resolveTemplate } from '@/components/templates/registry';
+import { resolveTenantLinkBase } from '@/lib/tenant-link-base';
 
 interface ProductDetailPageProps {
   params: { market_slug: string; product_slug: string };
@@ -39,6 +40,7 @@ export default async function ProductDetailPage({ params }: ProductDetailPagePro
   return (
     <ProductDetailView
       marketSlug={params.market_slug}
+      linkBase={resolveTenantLinkBase(params.market_slug)}
       marketId={market.id}
       marketName={market.name}
       product={product}
