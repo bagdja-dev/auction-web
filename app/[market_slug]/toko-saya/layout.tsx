@@ -26,7 +26,14 @@ export default async function TokoSayaLayout({ children, params }: TokoSayaLayou
   if (!market) notFound();
 
   return (
-    <TokoSayaShell marketId={market.id} linkBase={resolveTenantLinkBase(params.market_slug)} marketName={market.name}>
+    <TokoSayaShell
+      marketId={market.id}
+      linkBase={resolveTenantLinkBase(params.market_slug)}
+      marketName={market.name}
+      requiresScheduledStart={market.requires_scheduled_start}
+      minDescriptionLength={market.min_description_length}
+      maxDescriptionLength={market.max_description_length}
+    >
       {children}
     </TokoSayaShell>
   );

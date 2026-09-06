@@ -20,8 +20,8 @@ export function TokoSayaSidebar({ linkBase, collapsed, onToggleCollapsed }: Side
   const base = `${linkBase}/toko-saya`;
   const items = [
     { href: base, label: 'Dashboard' },
-    { href: `${base}/lelang`, label: 'Lelang' },
-    { href: `${base}/beli-langsung`, label: 'Beli Langsung' },
+    { href: `${base}/toko`, label: 'Toko Saya' },
+    { href: `${base}/pesanan`, label: 'Pesanan Saya' },
     { href: `${base}/pengaturan`, label: 'Pengaturan Toko' },
   ];
 

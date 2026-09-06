@@ -20,6 +20,8 @@ export interface ProductDetailViewProps {
   marketName: string;
   product: ProductPublic;
   registrationDeadlineMinutes: number | null;
+  /** `false` = Market ini tidak pakai registrasi/deposit — buyer langsung bid. */
+  requiresRegistration: boolean;
 }
 
 // `product.description` = HTML dari WYSIWYG editor (`components/rich-text-editor.tsx`,
@@ -67,6 +69,7 @@ export default function ProductDetailView({
   marketName,
   product,
   registrationDeadlineMinutes,
+  requiresRegistration,
 }: ProductDetailViewProps) {
   const { user, isLoggedIn } = useAuth();
   const displayName = user?.username ?? user?.email ?? undefined;
@@ -218,6 +221,7 @@ export default function ProductDetailView({
                 marketId={marketId}
                 marketSlug={marketSlug}
                 linkBase={linkBase}
+                requiresRegistration={requiresRegistration}
                 productId={product.id}
                 productSlug={product.slug}
                 startingPrice={product.price}

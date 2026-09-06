@@ -50,12 +50,6 @@ interface FormState {
   shippingOrigin: ShippingAreaSelection | null;
 }
 
-// Deskripsi minimal 500 karakter TEKS (bukan HTML mentah) — dicek juga di
-// backend saat publish (`ProductsService.validateForPublish`, BUKAN saat
-// draft/create, lihat komentar di sana). Blok submit di sini murni UX
-// nudge, bukan satu-satunya lapis validasi.
-const MIN_DESCRIPTION_LENGTH = 500;
-
 function plainTextLength(html: string): number {
   return html.replace(/<[^>]*>/g, '').trim().length;
 }
@@ -119,7 +113,7 @@ function productToForm(product: Product): FormState {
  * sudah published/sold/expired.
  */
 export function ProductFormModal({ open, onClose, product, onSaved, defaultModeJual }: ProductFormModalProps) {
-  const { marketId } = useTokoSaya();
+  const { marketId, requiresScheduledStart, minDescriptionLength, maxDescriptionLength, seller } = useTokoSaya();
   const isEdit = !!product;
 
   // Lazy-init LANGSUNG dari `product` (bukan `useEffect` setelah render) —
@@ -131,13 +125,40 @@ export function ProductFormModal({ open, onClose, product, onSaved, defaultModeJ
   // sempat jalan — `RichTextEditor` yang baru mount di render pertama itu
   // sempat menerima `value` lama/kosong, hasil duplicate/edit produk lain
   // kadang tidak nempel ke editor.
-  const [form, setForm] = useState<FormState>(() =>
-    product ? productToForm(product) : { ...EMPTY_FORM, modeJual: defaultModeJual ?? EMPTY_FORM.modeJual },
-  );
+  //
+  // Produk BARU (bukan edit) — prefill `shippingOrigin` dari alamat toko
+  // seller (`seller.shipping_area_id`/`shipping_area_name`, permintaan
+  // 2026-09-07) kalau sudah diisi, supaya tidak perlu ngetik ulang tiap buat
+  // produk. Produk edit TETAP pakai `shipping_origin_area_name` produk itu
+  // sendiri (bisa beda dari alamat toko saat ini, tidak boleh ketimpa diam-diam).
+  const [form, setForm] = useState<FormState>(() => {
+    if (product) return productToForm(product);
+    return {
+      ...EMPTY_FORM,
+      modeJual: defaultModeJual ?? EMPTY_FORM.modeJual,
+      shippingOrigin: seller?.shipping_area_id
+        ? { providerAreaId: seller.shipping_area_id, name: seller.shipping_area_name ?? '' }
+        : null,
+    };
+  });
+  // Market requiresScheduledStart=false — input "Buka Lelang" disembunyikan
+  // secara default (lelang langsung buka begitu di-publish), baru muncul
+  // kalau seller centang checkbox ini (permintaan 2026-09-07). Default
+  // checked kalau produk (edit) sudah kadung punya auction_start_at.
+  const [setsStartDate, setSetsStartDate] = useState(() => Boolean(product?.auction_start_at));
   const [slugTouched, setSlugTouched] = useState(isEdit);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [descriptionLength, setDescriptionLength] = useState(() => plainTextLength(form.description));
+
+  // Batas panjang description SEKARANG diatur per-Market (Market Settings,
+  // dulu hardcode 500 minimum tanpa batas maksimum di sini — bug ditemukan
+  // 2026-09-07: Market yang sudah longgarkan batasnya jadi 0 tetap kena
+  // blokir submit gara-gara konstanta lokal lama). `min=0` = tidak ada batas
+  // minimum, `max=null` = tidak ada batas maksimum.
+  const descriptionTooShort = minDescriptionLength > 0 && descriptionLength < minDescriptionLength;
+  const descriptionTooLong = maxDescriptionLength != null && descriptionLength > maxDescriptionLength;
+  const descriptionInvalid = descriptionTooShort || descriptionTooLong;
 
   function updateField<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -150,8 +171,12 @@ export function ProductFormModal({ open, onClose, product, onSaved, defaultModeJ
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (descriptionLength < MIN_DESCRIPTION_LENGTH) {
-      setError(`Deskripsi minimal ${MIN_DESCRIPTION_LENGTH} karakter (saat ini ${descriptionLength}).`);
+    if (descriptionTooShort) {
+      setError(`Deskripsi minimal ${minDescriptionLength} karakter (saat ini ${descriptionLength}).`);
+      return;
+    }
+    if (descriptionTooLong) {
+      setError(`Deskripsi maksimal ${maxDescriptionLength} karakter (saat ini ${descriptionLength}).`);
       return;
     }
     setSaving(true);
@@ -234,8 +259,10 @@ export function ProductFormModal({ open, onClose, product, onSaved, defaultModeJ
         <div>
           <div className="mb-1 flex items-center justify-between">
             <label className="block text-sm font-medium text-zinc-700">Deskripsi</label>
-            <span className={`text-xs font-medium ${descriptionLength < MIN_DESCRIPTION_LENGTH ? 'text-[var(--brand-error)]' : 'text-green-600'}`}>
-              {descriptionLength} / {MIN_DESCRIPTION_LENGTH} karakter minimum
+            <span className={`text-xs font-medium ${descriptionInvalid ? 'text-[var(--brand-error)]' : 'text-green-600'}`}>
+              {descriptionLength} karakter
+              {minDescriptionLength > 0 && ` (minimal ${minDescriptionLength})`}
+              {maxDescriptionLength != null && ` (maksimal ${maxDescriptionLength})`}
             </span>
           </div>
           <RichTextEditor
@@ -261,9 +288,14 @@ export function ProductFormModal({ open, onClose, product, onSaved, defaultModeJ
             }}
             placeholder="Ceritakan kondisi, riwayat, keunikan produk selengkap-lengkapnya — deskripsi detail membantu buyer yakin sebelum bid/beli."
           />
-          {descriptionLength < MIN_DESCRIPTION_LENGTH && (
+          {descriptionTooShort && (
             <p className="mt-1 text-xs text-zinc-400">
-              Kurang {MIN_DESCRIPTION_LENGTH - descriptionLength} karakter lagi.
+              Kurang {minDescriptionLength - descriptionLength} karakter lagi.
+            </p>
+          )}
+          {descriptionTooLong && (
+            <p className="mt-1 text-xs text-[var(--brand-error)]">
+              Kelebihan {descriptionLength - maxDescriptionLength!} karakter dari batas maksimum.
             </p>
           )}
         </div>
@@ -321,13 +353,41 @@ export function ProductFormModal({ open, onClose, product, onSaved, defaultModeJ
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="mb-1 block text-sm font-medium text-zinc-700">Buka Lelang</label>
-                <input
-                  type="datetime-local"
-                  value={form.auctionStartAt}
-                  onChange={(e) => updateField('auctionStartAt', e.target.value)}
-                  className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-[var(--brand-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--brand-primary)]"
-                />
+                {requiresScheduledStart ? (
+                  <>
+                    <label className="mb-1 block text-sm font-medium text-zinc-700">Buka Lelang</label>
+                    <input
+                      type="datetime-local"
+                      value={form.auctionStartAt}
+                      onChange={(e) => updateField('auctionStartAt', e.target.value)}
+                      className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-[var(--brand-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--brand-primary)]"
+                    />
+                  </>
+                ) : (
+                  <>
+                    <label className="mb-1 flex items-center gap-2 text-sm font-medium text-zinc-700">
+                      <input
+                        type="checkbox"
+                        checked={setsStartDate}
+                        onChange={(e) => {
+                          setSetsStartDate(e.target.checked);
+                          if (!e.target.checked) updateField('auctionStartAt', '');
+                        }}
+                      />
+                      Tentukan Tanggal Mulai Lelang
+                    </label>
+                    {setsStartDate ? (
+                      <input
+                        type="datetime-local"
+                        value={form.auctionStartAt}
+                        onChange={(e) => updateField('auctionStartAt', e.target.value)}
+                        className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-[var(--brand-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--brand-primary)]"
+                      />
+                    ) : (
+                      <p className="text-xs text-zinc-400">Lelang langsung buka begitu produk di-publish.</p>
+                    )}
+                  </>
+                )}
               </div>
               <div>
                 <label className="mb-1 block text-sm font-medium text-zinc-700">Tutup Lelang</label>
@@ -406,8 +466,14 @@ export function ProductFormModal({ open, onClose, product, onSaved, defaultModeJ
           </button>
           <button
             type="submit"
-            disabled={saving || descriptionLength < MIN_DESCRIPTION_LENGTH}
-            title={descriptionLength < MIN_DESCRIPTION_LENGTH ? `Deskripsi belum mencapai ${MIN_DESCRIPTION_LENGTH} karakter minimum` : undefined}
+            disabled={saving || descriptionInvalid}
+            title={
+              descriptionTooShort
+                ? `Deskripsi belum mencapai ${minDescriptionLength} karakter minimum`
+                : descriptionTooLong
+                  ? `Deskripsi melebihi ${maxDescriptionLength} karakter maksimum`
+                  : undefined
+            }
             className="rounded-lg bg-[var(--brand-primary)] px-4 py-2 text-sm font-medium text-white transition hover:bg-[var(--brand-primary-hover)] disabled:opacity-50"
           >
             {saving ? 'Menyimpan…' : isEdit ? 'Simpan Perubahan' : 'Simpan sebagai Draft'}

@@ -9,6 +9,8 @@ import { ApiError, apiClient } from '@/lib/proxy-client';
 import type {
   AuctionRegistration,
   AuctionRegistrationMeResponse,
+  AuctionSettlement,
+  AuctionSettlementMeResponse,
   Order,
   OrderForSellerResponse,
   Product,
@@ -72,7 +74,7 @@ export default function ListingDetailContent({ productId }: ListingDetailContent
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [winner, setWinner] = useState<AuctionRegistration | null>(null);
+  const [winner, setWinner] = useState<AuctionRegistration | AuctionSettlement | null>(null);
   const [order, setOrder] = useState<Order | null>(null);
   const [buyerInfoLoading, setBuyerInfoLoading] = useState(false);
 
@@ -110,8 +112,18 @@ export default function ListingDetailContent({ productId }: ListingDetailContent
     const request =
       product.mode_jual === 'AUCTION'
         ? apiClient<AuctionRegistrationMeResponse>(`/api/markets/${marketId}/products/${productId}/registrations/winner`).then(
-            (res) => {
-              if (!cancelled) setWinner(res.registration);
+            async (res) => {
+              if (cancelled) return;
+              if (res.registration) {
+                setWinner(res.registration);
+                return;
+              }
+              // Tidak ada baris registrasi (Market requiresRegistration=false)
+              // — fallback ambil alamat kirim dari settlement.
+              const settlementRes = await apiClient<AuctionSettlementMeResponse>(
+                `/api/markets/${marketId}/products/${productId}/settlement/winner-for-seller`,
+              );
+              if (!cancelled) setWinner(settlementRes.settlement);
             },
           )
         : apiClient<OrderForSellerResponse>(`/api/markets/${marketId}/products/${productId}/order`).then((res) => {
@@ -129,11 +141,10 @@ export default function ListingDetailContent({ productId }: ListingDetailContent
     };
   }, [marketId, productId, product]);
 
-  const backHref = product
-    ? product.mode_jual === 'AUCTION'
-      ? `${linkBase}/toko-saya/lelang`
-      : `${linkBase}/toko-saya/beli-langsung`
-    : `${linkBase}/toko-saya`;
+  // `?mode=` supaya mendarat di tab mode yang benar di "Toko Saya" (restrukturisasi
+  // per-role 2026-09-07 — lihat catatan di `toko/toko-content.tsx`), bukan
+  // selalu tab default.
+  const backHref = product ? `${linkBase}/toko-saya/toko?mode=${product.mode_jual}` : `${linkBase}/toko-saya`;
 
   if (!seller) {
     return (

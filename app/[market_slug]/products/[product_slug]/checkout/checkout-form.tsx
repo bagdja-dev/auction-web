@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 
 import { ShippingAreaAutocomplete, type ShippingAreaSelection } from '@/components/shipping-area-autocomplete';
+import { useSellerAddressPrefill } from '@/hooks/use-seller-address';
 import { ApiError, apiClient } from '@/lib/proxy-client';
 import type { CheckoutPayload, Order, ShippingCostOption } from '@/lib/types';
 
@@ -51,6 +52,21 @@ export function CheckoutForm({ linkBase, marketId, productId, productName, price
   function updateField<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
+
+  // Prefill alamat tujuan dari alamat toko buyer sendiri (kalau dia JUGA
+  // terdaftar sebagai seller di Market ini dan sudah isi alamat tokonya) —
+  // permintaan 2026-09-07. Guard "masih kosong" supaya tidak menimpa
+  // ketikan user kalau fetch ini kebetulan resolve setelah user mulai isi
+  // form sendiri.
+  const sellerAddress = useSellerAddressPrefill(marketId);
+  useEffect(() => {
+    if (sellerAddress.address) {
+      setForm((prev) => (prev.address ? prev : { ...prev, address: sellerAddress.address! }));
+    }
+    if (sellerAddress.shippingArea) {
+      setDestinationArea((prev) => prev ?? sellerAddress.shippingArea);
+    }
+  }, [sellerAddress]);
 
   // Hitung ongkir real-time begitu area tujuan terpilih.
   useEffect(() => {

@@ -41,7 +41,7 @@ export function MarketAppBar({
 }: MarketAppBarProps) {
   return (
     <header
-      className={`sticky top-0 z-10 mb-8 flex flex-wrap items-center justify-between gap-4 bg-white pb-6 pt-4 ${borderClassName}`}
+      className={`sticky top-0 z-20 mb-8 flex flex-wrap items-center justify-between gap-4 bg-white pb-6 pt-4 ${borderClassName}`}
     >
       {left}
       <AccountBadge linkBase={linkBase} isLoggedIn={isLoggedIn} displayName={displayName} />

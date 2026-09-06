@@ -1,13 +1,13 @@
 'use client';
 
-interface RoleTabsProps<T extends string> {
+interface TabSwitcherProps<T extends string> {
   tabs: { key: T; label: string }[];
   active: T;
   onChange: (key: T) => void;
 }
 
-/** Tab switcher generik (seller vs buyer) dipakai `lelang-content.tsx`/`beli-langsung-content.tsx`. */
-export function RoleTabs<T extends string>({ tabs, active, onChange }: RoleTabsProps<T>) {
+/** Tab switcher generik — dipakai `toko-content.tsx`/`pesanan-content.tsx` (switch mode jual: Lelang/Beli Langsung). */
+export function TabSwitcher<T extends string>({ tabs, active, onChange }: TabSwitcherProps<T>) {
   return (
     <div className="flex gap-2 border-b border-zinc-200">
       {tabs.map((tab) => (

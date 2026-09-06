@@ -5,6 +5,7 @@
  */
 
 import type { ShippingArea } from './types';
+import { marketPublicTag } from './revalidate';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5010';
 
@@ -19,6 +20,10 @@ export interface Market {
   template_id: string | null;
   is_active: boolean;
   registration_deadline_minutes: number | null;
+  requires_registration: boolean;
+  requires_scheduled_start: boolean;
+  min_description_length: number;
+  max_description_length: number | null;
 }
 
 export interface ProductPublic {
@@ -54,8 +59,15 @@ export interface PaginatedResult<T> {
   total: number;
 }
 
-async function fetchPublic<T>(path: string): Promise<T | null> {
-  const res = await fetch(`${API_URL}${path}`, { next: { revalidate: 60 } });
+/**
+ * `revalidate: 60` tetap dipasang sebagai fallback berkala — `tags` (di-invalidate
+ * on-demand lewat `revalidateTag()`, lihat `app/api/internal/revalidate/route.ts`)
+ * biasanya jauh lebih cepat, tapi kalau trigger itu gagal/`REVALIDATE_SECRET`
+ * belum dikonfigurasi di `bagdja-auction-api`, cache tetap kadaluarsa sendiri
+ * paling lambat 60 detik.
+ */
+async function fetchPublic<T>(path: string, tags: string[]): Promise<T | null> {
+  const res = await fetch(`${API_URL}${path}`, { next: { revalidate: 60, tags } });
   if (res.status === 404) return null;
   if (!res.ok) {
     throw new Error(`Bagdja Auction API ${res.status} on ${path}`);
@@ -64,7 +76,7 @@ async function fetchPublic<T>(path: string): Promise<T | null> {
 }
 
 export function getMarketBySlug(slug: string): Promise<Market | null> {
-  return fetchPublic<Market>(`/api/public/markets/${encodeURIComponent(slug)}`);
+  return fetchPublic<Market>(`/api/public/markets/${encodeURIComponent(slug)}`, [marketPublicTag(slug)]);
 }
 
 export interface ProductsQuery {
@@ -87,6 +99,7 @@ export async function getMarketProducts(
 
   const result = await fetchPublic<PaginatedResult<ProductPublic>>(
     `/api/public/markets/${encodeURIComponent(slug)}/products${qs}`,
+    [marketPublicTag(slug)],
   );
   return result ?? EMPTY_PRODUCTS;
 }
@@ -97,6 +110,7 @@ export function getMarketProductBySlug(
 ): Promise<ProductPublic | null> {
   return fetchPublic<ProductPublic>(
     `/api/public/markets/${encodeURIComponent(slug)}/products/${encodeURIComponent(productSlug)}`,
+    [marketPublicTag(slug)],
   );
 }
 

@@ -8,6 +8,7 @@ import { NumberInput } from '@/components/number-input';
 import { ShippingAreaAutocomplete, type ShippingAreaSelection } from '@/components/shipping-area-autocomplete';
 import { useAuctionRealtime } from '@/hooks/use-auction-realtime';
 import { useAuth } from '@/hooks/use-auth';
+import { useSellerAddressPrefill } from '@/hooks/use-seller-address';
 import { getMarketProductBySlug, type ProductStatus } from '@/lib/api-client';
 import { ApiError, apiClient } from '@/lib/proxy-client';
 import type {
@@ -39,6 +40,12 @@ export interface AuctionPanelProps {
   highestBidderId: string | null;
   /** Mode lihat-saja untuk pemilik produk (dibuka dari "Toko Saya" lewat `?view=owner`) — lihat sesi lelang tanpa bisa daftar/menawar. */
   readOnly?: boolean;
+  /**
+   * `false` = Market ini tidak pakai registrasi/deposit (permintaan
+   * pasca-demo 2026-09-07) — skip total fetch status registrasi & form
+   * registrasi, buyer langsung lihat `BiddingSection`.
+   */
+  requiresRegistration: boolean;
 }
 
 // Fase 3.B (execution-plan.md) — realtime WebSocket jadi mekanisme utama,
@@ -93,9 +100,15 @@ function PanelShell({ children }: { children: React.ReactNode }) {
 function HighestBidSummary({
   highestBid,
   startingPrice,
+  highestBidderUsername,
+  isCurrentUserHighestBidder,
 }: {
   highestBid: number | null;
   startingPrice: number;
+  /** Nama peserta pemasang tawaran tertinggi — cuma terisi di `BiddingSection` (butuh `history`), kosong di pemanggil lain (`RegistrationForm`, sebelum login) yang belum fetch riwayat tawaran. */
+  highestBidderUsername?: string | null;
+  /** `true` = tawaran tertinggi ini punya user yang sedang login — tampilkan "(Anda)" alih-alih/di samping nama. */
+  isCurrentUserHighestBidder?: boolean;
 }) {
   return (
     <div>
@@ -105,6 +118,12 @@ function HighestBidSummary({
           ? currencyFormatter.format(highestBid)
           : `Belum ada tawaran (harga awal ${currencyFormatter.format(startingPrice)})`}
       </p>
+      {highestBid != null && highestBidderUsername && (
+        <p className="text-xs text-zinc-500">
+          oleh {highestBidderUsername}
+          {isCurrentUserHighestBidder && ' (Anda)'}
+        </p>
+      )}
     </div>
   );
 }
@@ -130,19 +149,23 @@ export function AuctionPanel({
   registrationDeadlineMinutes,
   highestBidderId,
   readOnly = false,
+  requiresRegistration,
 }: AuctionPanelProps) {
   const { isLoggedIn, loading: authLoading } = useAuth();
   const loginHref = `/auth/login?next=${encodeURIComponent(`${linkBase}/products/${productSlug}`)}`;
 
   const [registration, setRegistration] = useState<AuctionRegistration | null>(null);
-  const [registrationChecked, setRegistrationChecked] = useState(false);
+  // Market requiresRegistration=false — tidak ada apapun untuk dicek, anggap
+  // "sudah dicek" dari awal supaya langsung lompat ke BiddingSection.
+  const [registrationChecked, setRegistrationChecked] = useState(!requiresRegistration);
   const [registrationError, setRegistrationError] = useState<string | null>(null);
 
   // Cek status registrasi SEKALI begitu diketahui user login — tidak nge-fetch
-  // sama sekali kalau belum login (cek `useAuth()` dari cookie, tanpa API call)
-  // ATAU kalau `readOnly` (pemilik produk, tidak relevan cek registrasi buyer).
+  // sama sekali kalau belum login (cek `useAuth()` dari cookie, tanpa API call),
+  // kalau `readOnly` (pemilik produk, tidak relevan cek registrasi buyer),
+  // ATAU kalau Market ini requiresRegistration=false (tidak ada yang perlu dicek).
   useEffect(() => {
-    if (readOnly || authLoading || !isLoggedIn) return;
+    if (readOnly || authLoading || !isLoggedIn || !requiresRegistration) return;
     let cancelled = false;
     (async () => {
       try {
@@ -178,6 +201,7 @@ export function AuctionPanel({
           auctionEndAt={auctionEndAt}
           initialProductStatus={productStatus}
           highestBidderId={highestBidderId}
+          requiresRegistration={requiresRegistration}
           readOnly
         />
       </PanelShell>
@@ -222,7 +246,7 @@ export function AuctionPanel({
     );
   }
 
-  if (!registration) {
+  if (requiresRegistration && !registration) {
     return (
       <PanelShell>
         <RegistrationForm
@@ -234,12 +258,13 @@ export function AuctionPanel({
           registrationDeadlineMinutes={registrationDeadlineMinutes}
           highestBid={initialHighestBid}
           startingPrice={startingPrice}
+          onRegistered={setRegistration}
         />
       </PanelShell>
     );
   }
 
-  if (registration.status === 'PENDING_PAYMENT') {
+  if (registration?.status === 'PENDING_PAYMENT') {
     return (
       <PanelShell>
         <PendingPaymentSection marketId={marketId} registration={registration} onUpdate={setRegistration} />
@@ -261,6 +286,7 @@ export function AuctionPanel({
         auctionEndAt={auctionEndAt}
         initialProductStatus={productStatus}
         highestBidderId={highestBidderId}
+        requiresRegistration={requiresRegistration}
       />
     </PanelShell>
   );
@@ -276,6 +302,7 @@ function RegistrationForm({
   registrationDeadlineMinutes,
   highestBid,
   startingPrice,
+  onRegistered,
 }: {
   marketId: string;
   productId: string;
@@ -285,6 +312,11 @@ function RegistrationForm({
   registrationDeadlineMinutes: number | null;
   highestBid: number | null;
   startingPrice: number;
+  /** Dipanggil begitu registrasi berhasil TANPA `checkout_url` (tier deposit
+   * 0% — backend langsung `HELD`, tidak ada yang perlu dibayar, lihat
+   * `auction-registrations.service.ts`) — update state Market panel supaya
+   * langsung pindah ke `BiddingSection`, TANPA redirect ke pembayaran. */
+  onRegistered: (registration: AuctionRegistration) => void;
 }) {
   const closed = isClosedForRegistration(productStatus, auctionStartAt, auctionEndAt, registrationDeadlineMinutes);
   // Dicek dari WAKTU (bukan cuma `productStatus`) supaya pesan tetap benar
@@ -305,6 +337,20 @@ function RegistrationForm({
   const [destinationArea, setDestinationArea] = useState<ShippingAreaSelection | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Prefill alamat dari alamat toko buyer sendiri (kalau dia JUGA terdaftar
+  // sebagai seller di Market ini dan sudah isi alamat tokonya) — permintaan
+  // 2026-09-07. Guard "masih kosong" supaya tidak menimpa ketikan user kalau
+  // fetch ini kebetulan resolve setelah user mulai isi form sendiri.
+  const sellerAddress = useSellerAddressPrefill(marketId);
+  useEffect(() => {
+    if (sellerAddress.address) {
+      setAddress((prev) => prev || sellerAddress.address!);
+    }
+    if (sellerAddress.shippingArea) {
+      setDestinationArea((prev) => prev ?? sellerAddress.shippingArea);
+    }
+  }, [sellerAddress]);
 
   useEffect(() => {
     if (closed) {
@@ -376,8 +422,11 @@ function RegistrationForm({
       );
 
       if (!registration.checkout_url) {
-        setError('Registrasi berhasil tetapi URL pembayaran tidak tersedia. Silakan hubungi dukungan.');
-        setSubmitting(false);
+        // Tier deposit 0% — backend sudah HELD langsung tanpa escrow (lihat
+        // `auction-registrations.service.ts`), tidak ada yang perlu dibayar.
+        // Bukan error — langsung tampilkan panel bidding, pola sama
+        // `handleTebusSekarang` untuk edge case `total_amount<=0`.
+        onRegistered(registration);
         return;
       }
 
@@ -532,6 +581,7 @@ function BiddingSection({
   initialProductStatus,
   highestBidderId,
   readOnly = false,
+  requiresRegistration,
 }: {
   marketId: string;
   marketSlug: string;
@@ -545,6 +595,8 @@ function BiddingSection({
   initialProductStatus: ProductStatus;
   highestBidderId: string | null;
   readOnly?: boolean;
+  /** `false` = tidak ada baris registrasi sama sekali — "Tebus Sekarang" perlu form alamat sendiri sebelum bisa submit. */
+  requiresRegistration: boolean;
 }) {
   const { user } = useAuth();
   const [highestBid, setHighestBid] = useState<number | null>(initialHighestBid);
@@ -574,6 +626,14 @@ function BiddingSection({
 
   const hasStarted = !auctionStartAt || nowMs >= new Date(auctionStartAt).getTime();
   const hasEnded = productStatus !== 'published' || (!!auctionEndAt && nowMs >= new Date(auctionEndAt).getTime());
+
+  // Baris riwayat yang cocok dengan tawaran tertinggi saat ini — dicocokkan
+  // lewat nominal (bukan urutan array/`highestBidderId` prop yang bisa basi
+  // kalau realtime belum sempat update prop itu) karena tiap bid WAJIB lebih
+  // tinggi dari sebelumnya (`min_increment`), jadi nominal selalu unik per
+  // produk. Satu sumber untuk nama DAN cek "apakah ini saya" (permintaan
+  // 2026-09-07), supaya konsisten.
+  const highestBidEntry = history?.find((b) => b.amount === highestBid);
 
   // Tick tiap detik supaya "belum mulai/sudah berakhir" ikut ke-update tanpa reload.
   useEffect(() => {
@@ -641,6 +701,26 @@ function BiddingSection({
   const [settlementActionLoading, setSettlementActionLoading] = useState(false);
   const [settlementError, setSettlementError] = useState<string | null>(null);
 
+  // requiresRegistration=false — tidak ada baris registrasi untuk diambil
+  // alamatnya, jadi "Tebus Sekarang" perlu form alamat sendiri dulu (mirror
+  // field yang sama dengan `RegistrationForm`/`checkout-form.tsx`).
+  const [showAddressForm, setShowAddressForm] = useState(false);
+  const [settlementRecipientName, setSettlementRecipientName] = useState('');
+  const [settlementPhone, setSettlementPhone] = useState('');
+  const [settlementAddress, setSettlementAddress] = useState('');
+  const [settlementDestinationArea, setSettlementDestinationArea] = useState<ShippingAreaSelection | null>(null);
+
+  // Prefill alamat dari alamat toko buyer sendiri — pola sama `RegistrationForm`.
+  const sellerAddress = useSellerAddressPrefill(marketId);
+  useEffect(() => {
+    if (sellerAddress.address) {
+      setSettlementAddress((prev) => prev || sellerAddress.address!);
+    }
+    if (sellerAddress.shippingArea) {
+      setSettlementDestinationArea((prev) => prev ?? sellerAddress.shippingArea);
+    }
+  }, [sellerAddress]);
+
   useEffect(() => {
     if (!isWinnerPersistent) return;
     let cancelled = false;
@@ -660,14 +740,32 @@ function BiddingSection({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isWinnerPersistent, marketId, productId]);
 
-  /** Dipakai baik tombol di modal celebrasi (`winnerModal`) maupun panel persisten di bawah — satu sumber logic. */
+  /**
+   * Dipakai baik tombol di modal celebrasi (`winnerModal`) maupun panel
+   * persisten di bawah — satu sumber logic. `requiresRegistration=false`
+   * (tidak ada baris registrasi untuk diambil alamatnya) — sertakan alamat
+   * dari form lokal (`showAddressForm`) di body request.
+   */
   async function handleTebusSekarang() {
     setSettlementActionLoading(true);
     setSettlementError(null);
     try {
       const data = await apiClient<AuctionSettlement>(
         `/api/markets/${marketId}/products/${productId}/settlement`,
-        { method: 'POST' },
+        {
+          method: 'POST',
+          body: JSON.stringify(
+            requiresRegistration
+              ? {}
+              : {
+                  recipient_name: settlementRecipientName,
+                  phone: settlementPhone,
+                  address: settlementAddress,
+                  destination_area_id: settlementDestinationArea?.providerAreaId,
+                  destination_area_name: settlementDestinationArea?.name,
+                },
+          ),
+        },
       );
       if (data.checkout_url) {
         window.location.href = data.checkout_url;
@@ -774,7 +872,12 @@ function BiddingSection({
       )}
 
       <div className="flex items-start justify-between gap-2">
-        <HighestBidSummary highestBid={highestBid} startingPrice={startingPrice} />
+        <HighestBidSummary
+          highestBid={highestBid}
+          startingPrice={startingPrice}
+          highestBidderUsername={highestBidEntry?.bidder_username}
+          isCurrentUserHighestBidder={user != null && highestBidEntry?.bidder_user_id === user.userId}
+        />
         <button
           type="button"
           onClick={() => setShowHistory(true)}
@@ -810,6 +913,68 @@ function BiddingSection({
               >
                 Lanjutkan Pembayaran
               </a>
+            ) : !requiresRegistration && !showAddressForm ? (
+              // Tidak ada baris registrasi (Market requiresRegistration=false)
+              // — belum ada alamat kirim tersimpan sama sekali, kumpulkan dulu
+              // lewat form ini sebelum submit pelunasan.
+              <button
+                type="button"
+                onClick={() => setShowAddressForm(true)}
+                className="w-full rounded-lg bg-[var(--brand-primary)] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-[var(--brand-primary-hover)]"
+              >
+                Isi Alamat & Tebus Sekarang
+              </button>
+            ) : !requiresRegistration && showAddressForm ? (
+              <div className="space-y-3 rounded-lg border border-zinc-200 bg-white p-3">
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-zinc-700">Nama Penerima</label>
+                  <input
+                    type="text"
+                    required
+                    value={settlementRecipientName}
+                    onChange={(e) => setSettlementRecipientName(e.target.value)}
+                    className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-[var(--brand-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--brand-primary)]"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-zinc-700">Nomor Telepon</label>
+                  <input
+                    type="tel"
+                    required
+                    value={settlementPhone}
+                    onChange={(e) => setSettlementPhone(e.target.value)}
+                    className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-[var(--brand-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--brand-primary)]"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-zinc-700">Alamat</label>
+                  <textarea
+                    required
+                    rows={3}
+                    value={settlementAddress}
+                    onChange={(e) => setSettlementAddress(e.target.value)}
+                    className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:border-[var(--brand-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--brand-primary)]"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-zinc-700">Alamat Tujuan</label>
+                  <ShippingAreaAutocomplete value={settlementDestinationArea} onChange={setSettlementDestinationArea} />
+                </div>
+                <button
+                  type="button"
+                  onClick={handleTebusSekarang}
+                  disabled={
+                    settlementActionLoading ||
+                    !settlementRecipientName.trim() ||
+                    !settlementPhone.trim() ||
+                    !settlementAddress.trim() ||
+                    !settlementDestinationArea
+                  }
+                  className="w-full rounded-lg bg-[var(--brand-primary)] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-[var(--brand-primary-hover)] disabled:opacity-50"
+                >
+                  {settlementActionLoading ? 'Memproses…' : 'Tebus Sekarang'}
+                </button>
+              </div>
             ) : (
               <button
                 type="button"
@@ -925,7 +1090,18 @@ function BiddingSection({
               {isWinner && (
                 <button
                   type="button"
-                  onClick={handleTebusSekarang}
+                  onClick={() => {
+                    // requiresRegistration=false — belum ada alamat kirim
+                    // tersimpan sama sekali, tutup modal saja lalu isi lewat
+                    // form di panel persisten di bawah (satu tempat, tidak
+                    // dobel form di modal ini).
+                    if (requiresRegistration) {
+                      handleTebusSekarang();
+                    } else {
+                      setWinnerModal(null);
+                      setShowAddressForm(true);
+                    }
+                  }}
                   disabled={settlementActionLoading}
                   className="w-full rounded-lg bg-[var(--brand-primary)] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-[var(--brand-primary-hover)] disabled:opacity-50"
                 >

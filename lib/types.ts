@@ -8,12 +8,22 @@
 export type ProductModeJual = 'AUCTION' | 'DIRECT_SELL';
 export type ProductStatus = 'draft' | 'published' | 'sold' | 'expired';
 
+/** Satu baris biaya tambahan bebas milik seller — HANYA data setting, belum dihitung ke tagihan buyer manapun. */
+export interface SellerAdditionalFee {
+  label: string;
+  amount: number;
+}
+
 export interface Seller {
   id: string;
   market_id: string;
   user_id: string;
   shop_name: string | null;
   email: string | null;
+  address: string | null;
+  shipping_area_id: string | null;
+  shipping_area_name: string | null;
+  additional_fees: SellerAdditionalFee[] | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -22,6 +32,14 @@ export interface Seller {
 export interface SellersMeResponse {
   registered: boolean;
   seller: Seller | null;
+}
+
+/** Body `POST .../sellers/register` — form "Buat Toko" (popup), semua field wajib. */
+export interface RegisterSellerPayload {
+  shop_name: string;
+  address: string;
+  shipping_area_id: string;
+  shipping_area_name: string;
 }
 
 export interface Product {
@@ -76,6 +94,11 @@ export type UpdateProductPayload = Partial<CreateProductPayload>;
 
 export interface UpdateSellerPayload {
   shop_name?: string;
+  address?: string;
+  shipping_area_id?: string;
+  shipping_area_name?: string;
+  /** Replace-all — kirim seluruh daftar (bukan cuma baris yang berubah). */
+  additional_fees?: SellerAdditionalFee[] | null;
 }
 
 /** Hasil `GET /api/public/shipping/areas?q=` — no-auth, dipakai autocomplete alamat tujuan. */
@@ -250,7 +273,8 @@ export interface AuctionSettlement {
   id: string;
   market_id: string;
   product_id: string;
-  registration_id: string;
+  /** `null` kalau Market produk ini requires_registration=false (tidak pernah ada baris registrasi). */
+  registration_id: string | null;
   buyer_user_id: string;
   seller_id: string;
   final_amount: number;
@@ -263,6 +287,12 @@ export interface AuctionSettlement {
   status: AuctionSettlementStatus;
   created_at: string;
   updated_at: string;
+  /** Alamat kirim — HANYA terisi kalau Market requires_registration=false (lihat CreateSettlementDto). */
+  recipient_name: string | null;
+  phone: string | null;
+  address: string | null;
+  destination_area_id: string | null;
+  destination_area_name: string | null;
   /** Cuma terisi di `GET .../settlements/:id` (relasi `product` di-load di sana). */
   product?: ProductMediaSummary;
 }

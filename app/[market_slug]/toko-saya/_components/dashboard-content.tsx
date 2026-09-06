@@ -6,7 +6,8 @@ import { useEffect, useState } from 'react';
 import { apiClient } from '@/lib/proxy-client';
 import type { Product, WalletBalance } from '@/lib/types';
 import { useTokoSaya } from './toko-saya-context';
-import { AuctionIcon, ProductIcon, SettingsIcon } from './icons';
+import { CreateShopModal } from './create-shop-modal';
+import { OrderIcon, ProductIcon, SettingsIcon } from './icons';
 
 const currencyFormatter = new Intl.NumberFormat('id-ID', {
   style: 'currency',
@@ -27,11 +28,12 @@ const currencyFormatter = new Intl.NumberFormat('id-ID', {
  * biasa.
  */
 export default function DashboardContent() {
-  const { marketId, linkBase, seller, registerSeller, registering, registerError } = useTokoSaya();
+  const { marketId, linkBase, seller, registering, registerError } = useTokoSaya();
 
   const [wallet, setWallet] = useState<WalletBalance | null>(null);
   const [walletError, setWalletError] = useState<string | null>(null);
   const [products, setProducts] = useState<Product[] | null>(null);
+  const [showCreateShopModal, setShowCreateShopModal] = useState(false);
 
   // Saldo itu wallet PERSONAL (per userId login, sama seperti seluruh
   // platform Bagdja lainnya) — BUKAN milik toko, jadi tetap di-fetch walau
@@ -66,10 +68,6 @@ export default function DashboardContent() {
     };
   }, [marketId, seller]);
 
-  async function handleCreateShop() {
-    await registerSeller();
-  }
-
   const stats = {
     total: products?.length ?? 0,
     draft: products?.filter((p) => p.status === 'draft').length ?? 0,
@@ -96,7 +94,7 @@ export default function DashboardContent() {
             </div>
             <button
               type="button"
-              onClick={handleCreateShop}
+              onClick={() => setShowCreateShopModal(true)}
               disabled={registering}
               className="shrink-0 rounded-lg bg-[var(--brand-primary)] px-4 py-2 text-sm font-medium text-white transition hover:bg-[var(--brand-primary-hover)] disabled:opacity-50"
             >
@@ -155,18 +153,18 @@ export default function DashboardContent() {
       {/* Grid ikon menu — cuma tampil di mobile (<md), desktop sudah punya sidebar */}
       <section className="grid grid-cols-2 gap-3 md:hidden">
         <Link
-          href={`${linkBase}/toko-saya/lelang`}
-          className="flex flex-col items-center gap-2 rounded-xl border border-zinc-200 bg-white p-5 text-center shadow-sm transition hover:border-[var(--brand-primary)]"
-        >
-          <AuctionIcon className="h-6 w-6 text-[var(--brand-primary)]" />
-          <span className="text-sm font-medium text-zinc-700">Lelang</span>
-        </Link>
-        <Link
-          href={`${linkBase}/toko-saya/beli-langsung`}
+          href={`${linkBase}/toko-saya/toko`}
           className="flex flex-col items-center gap-2 rounded-xl border border-zinc-200 bg-white p-5 text-center shadow-sm transition hover:border-[var(--brand-primary)]"
         >
           <ProductIcon className="h-6 w-6 text-[var(--brand-primary)]" />
-          <span className="text-sm font-medium text-zinc-700">Beli Langsung</span>
+          <span className="text-sm font-medium text-zinc-700">Toko Saya</span>
+        </Link>
+        <Link
+          href={`${linkBase}/toko-saya/pesanan`}
+          className="flex flex-col items-center gap-2 rounded-xl border border-zinc-200 bg-white p-5 text-center shadow-sm transition hover:border-[var(--brand-primary)]"
+        >
+          <OrderIcon className="h-6 w-6 text-[var(--brand-primary)]" />
+          <span className="text-sm font-medium text-zinc-700">Pesanan Saya</span>
         </Link>
         <Link
           href={`${linkBase}/toko-saya/pengaturan`}
@@ -176,6 +174,8 @@ export default function DashboardContent() {
           <span className="text-sm font-medium text-zinc-700">Pengaturan Toko</span>
         </Link>
       </section>
+
+      <CreateShopModal open={showCreateShopModal} onClose={() => setShowCreateShopModal(false)} />
     </div>
   );
 }

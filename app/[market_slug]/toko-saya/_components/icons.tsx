@@ -24,6 +24,18 @@ export function AuctionIcon({ className }: { className?: string }) {
   );
 }
 
+export function OrderIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} className={className}>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M6 3h12v18l-3-2-3 2-3-2-3 2V3zM9 8h6M9 12h6"
+      />
+    </svg>
+  );
+}
+
 export function BackIcon({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className={className}>

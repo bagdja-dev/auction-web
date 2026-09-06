@@ -2,13 +2,25 @@
 
 import { createContext, useContext } from 'react';
 
-import type { Seller } from '@/lib/types';
+import type { RegisterSellerPayload, Seller } from '@/lib/types';
 
 export interface TokoSayaContextValue {
   marketId: string;
   /** Base path untuk link internal — `''` di subdomain/custom domain, `/{slug}` di path-based (local dev). Lihat `lib/tenant-link-base.ts`. */
   linkBase: string;
   marketName: string;
+  /** `false` = auction_start_at opsional saat publish — dipakai `ProductFormModal` untuk sembunyikan input tanggal mulai di balik checkbox. */
+  requiresScheduledStart: boolean;
+  /**
+   * Batas panjang teks description produk (setelah HTML di-strip), diatur
+   * per-Market lewat Market Settings — dulu hardcode 500 minimum tanpa batas
+   * maksimum di `ProductFormModal`, sekarang dinamis (0 = tidak ada batas
+   * minimum, `max` `null` = tidak ada batas maksimum). WAJIB dipakai form,
+   * BUKAN konstanta lokal — kalau tidak, tombol submit bisa disabled keliru
+   * (Market sudah longgarkan batasnya tapi form masih blokir pakai angka lama).
+   */
+  minDescriptionLength: number;
+  maxDescriptionLength: number | null;
   /**
    * `null` = user login tapi BELUM daftar toko di Market ini (polish 31
    * Agustus 2026 — dashboard tetap bisa diakses dalam kondisi ini, tombol
@@ -18,7 +30,8 @@ export interface TokoSayaContextValue {
    */
   seller: Seller | null;
   refreshSeller: () => Promise<void>;
-  registerSeller: (shopName?: string) => Promise<void>;
+  /** `true` = berhasil (dipakai `CreateShopModal` untuk auto-close popup). */
+  registerSeller: (payload: RegisterSellerPayload) => Promise<boolean>;
   registering: boolean;
   registerError: string | null;
 }

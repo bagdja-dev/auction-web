@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 
 import { ApiError, apiClient } from '@/lib/proxy-client';
-import type { Seller, SellersMeResponse } from '@/lib/types';
+import type { RegisterSellerPayload, Seller, SellersMeResponse } from '@/lib/types';
 import { useAuth } from '@/hooks/use-auth';
 import { TokoSayaSidebar } from './sidebar';
 import { TokoSayaProvider } from './toko-saya-context';
@@ -16,6 +16,9 @@ interface TokoSayaShellProps {
   /** Base path untuk link internal — `''` di subdomain/custom domain, `/{slug}` di path-based (local dev). Lihat `lib/tenant-link-base.ts`. */
   linkBase: string;
   marketName: string;
+  requiresScheduledStart: boolean;
+  minDescriptionLength: number;
+  maxDescriptionLength: number | null;
   children: React.ReactNode;
 }
 
@@ -32,7 +35,15 @@ interface TokoSayaShellProps {
  * - <md: tanpa sidebar — navigasi antar halaman lewat grid ikon menu di
  *   Dashboard (lihat page.tsx), children dirender penuh di bawah topbar.
  */
-export function TokoSayaShell({ marketId, linkBase, marketName, children }: TokoSayaShellProps) {
+export function TokoSayaShell({
+  marketId,
+  linkBase,
+  marketName,
+  requiresScheduledStart,
+  minDescriptionLength,
+  maxDescriptionLength,
+  children,
+}: TokoSayaShellProps) {
   const { user } = useAuth();
 
   const [loading, setLoading] = useState(true);
@@ -82,18 +93,25 @@ export function TokoSayaShell({ marketId, linkBase, marketName, children }: Toko
     });
   }
 
-  /** Dipakai `DashboardContent` (tombol "Buat Toko") — bukan lagi form inline di shell ini. */
-  const registerSeller = useCallback(async (shopName?: string) => {
+  /**
+   * Dipakai `CreateShopModal` (popup "Buat Toko", 2026-09-07 — dulu form
+   * inline di sini cuma nama toko, sekarang popup kumpulkan alamat
+   * sekaligus). Return `boolean` (bukan `void`) supaya modal tahu kapan
+   * harus auto-close (sukses) vs tetap terbuka menampilkan `registerError`.
+   */
+  const registerSeller = useCallback(async (payload: RegisterSellerPayload): Promise<boolean> => {
     setRegistering(true);
     setRegisterError(null);
     try {
       const created = await apiClient<Seller>(`/api/markets/${marketId}/sellers/register`, {
         method: 'POST',
-        body: JSON.stringify(shopName ? { shop_name: shopName } : {}),
+        body: JSON.stringify(payload),
       });
       setSeller(created);
+      return true;
     } catch (err) {
       setRegisterError(err instanceof ApiError ? err.message : 'Gagal mendaftar sebagai seller.');
+      return false;
     } finally {
       setRegistering(false);
     }
@@ -143,7 +161,19 @@ export function TokoSayaShell({ marketId, linkBase, marketName, children }: Toko
 
   return (
     <TokoSayaProvider
-      value={{ marketId, linkBase, marketName, seller, refreshSeller: loadSellerStatus, registerSeller, registering, registerError }}
+      value={{
+        marketId,
+        linkBase,
+        marketName,
+        requiresScheduledStart,
+        minDescriptionLength,
+        maxDescriptionLength,
+        seller,
+        refreshSeller: loadSellerStatus,
+        registerSeller,
+        registering,
+        registerError,
+      }}
     >
       <div className="flex h-screen flex-col overflow-hidden bg-zinc-50">
         {topbar}

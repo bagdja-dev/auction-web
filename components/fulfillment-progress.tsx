@@ -4,7 +4,11 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { ApiError, apiClient } from '@/lib/proxy-client';
 import { UploadError, uploadAsset } from '@/lib/upload-asset';
-import type { FulfillmentProgress as FulfillmentProgressData, MasterFlowFormField } from '@/lib/types';
+import type {
+  FulfillmentProgress as FulfillmentProgressData,
+  MasterFlowFormField,
+  MasterFlowStep,
+} from '@/lib/types';
 
 interface FulfillmentProgressProps {
   marketId: string;
@@ -42,6 +46,18 @@ export function FulfillmentProgress({ marketId, productId, role }: FulfillmentPr
 
   const [formValues, setFormValues] = useState<Record<string, string>>({});
   const [uploadingKey, setUploadingKey] = useState<string | null>(null);
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+
+  /** Salin nilai step-selesai (mis. nomor resi) ke clipboard — feedback "Disalin" sebentar, bukan alert. */
+  async function handleCopy(key: string, value: string) {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopiedKey(key);
+      setTimeout(() => setCopiedKey((prev) => (prev === key ? null : prev)), 1500);
+    } catch {
+      // Clipboard API bisa gagal (izin browser dll) — diam, bukan bagian kritis halaman ini.
+    }
+  }
 
   const load = useCallback(async () => {
     try {
@@ -68,7 +84,7 @@ export function FulfillmentProgress({ marketId, productId, role }: FulfillmentPr
     return <p className="text-sm text-[var(--brand-error)]">{loadError ?? 'Gagal memuat progress fulfillment.'}</p>;
   }
 
-  const { fulfillment, steps, can_confirm, can_approve_current_step } = data;
+  const { fulfillment, steps, logs, can_confirm, can_approve_current_step } = data;
   const pendingApproval = !!fulfillment.current_step_guaranty_ends_at;
   const nextStep = steps.find((s) => s.sequence === fulfillment.current_step_sequence + 1);
   const sellerCanComplete =
@@ -167,6 +183,60 @@ export function FulfillmentProgress({ marketId, productId, role }: FulfillmentPr
     );
   }
 
+  /**
+   * Nilai yang diisi seller saat menandai step ini selesai (`log.form_data`,
+   * key = `MasterFlowFormField.key`) — SEBELUMNYA `logs` dari API sama sekali
+   * tidak dipakai, jadi step yang sudah "Selesai" tidak pernah menampilkan
+   * isian seller (nomor resi, foto bukti kirim, dst), cuma label statis dari
+   * definisi step. `image_url` dirender sebagai thumbnail, tipe lain teks.
+   */
+  function renderStepValues(step: MasterFlowStep) {
+    const log = logs.find((l) => l.event_type === 'STEP_COMPLETED' && l.step_sequence === step.sequence);
+    const formData = log?.form_data;
+    const schema = step.form_schema ?? [];
+    if (!formData || schema.length === 0) return null;
+
+    const entries = schema.filter((field) => formData[field.key] != null && formData[field.key] !== '');
+    if (entries.length === 0) return null;
+
+    return (
+      <div className="mt-2 space-y-1 border-t border-green-200 pt-2">
+        {entries.map((field) => {
+          const value = formData[field.key];
+          const copyKey = `${step.id}:${field.key}`;
+          return (
+            <div key={field.key} className="text-xs text-zinc-600">
+              <span className="font-medium text-zinc-700">{field.label}:</span>{' '}
+              {field.type === 'image_url' ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={String(value)} alt={field.label} className="mt-1 h-16 w-16 rounded-lg border border-zinc-200 object-cover" />
+              ) : (
+                <span className="inline-flex items-center gap-1">
+                  {String(value)}
+                  <button
+                    type="button"
+                    onClick={() => handleCopy(copyKey, String(value))}
+                    title="Salin"
+                    className="rounded p-0.5 text-zinc-400 transition hover:bg-zinc-100 hover:text-zinc-600"
+                  >
+                    {copiedKey === copyKey ? (
+                      <span className="text-[10px] font-medium text-green-600">Disalin</span>
+                    ) : (
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-3.5 w-3.5">
+                        <rect x="9" y="9" width="12" height="12" rx="2" strokeLinecap="round" strokeLinejoin="round" />
+                        <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    )}
+                  </button>
+                </span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4 rounded-lg border border-zinc-200 bg-white p-4">
       <h3 className="text-sm font-semibold text-zinc-900">Progress Fulfillment</h3>
@@ -213,6 +283,7 @@ export function FulfillmentProgress({ marketId, productId, role }: FulfillmentPr
                     Auto-release {formatDateTime(fulfillment.current_step_guaranty_ends_at)} kalau tidak disetujui.
                   </p>
                 )}
+                {isDone && renderStepValues(step)}
               </li>
             );
           })}

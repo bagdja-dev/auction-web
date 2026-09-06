@@ -64,11 +64,18 @@ export function AccountBadge({ linkBase, isLoggedIn, displayName }: AccountBadge
           <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} aria-hidden="true" />
           <div className="absolute right-0 z-20 mt-2 w-44 rounded-lg border border-zinc-200 bg-white py-1 shadow-lg">
             <Link
-              href={`${linkBase}/toko-saya`}
+              href={`${linkBase}/toko-saya/toko`}
               onClick={() => setMenuOpen(false)}
               className="block px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-50"
             >
-              Dashboard
+              Toko Saya
+            </Link>
+            <Link
+              href={`${linkBase}/toko-saya/pesanan`}
+              onClick={() => setMenuOpen(false)}
+              className="block px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-50"
+            >
+              Pesanan Saya
             </Link>
             <a href="/auth/logout" className="block px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-50">
               Keluar

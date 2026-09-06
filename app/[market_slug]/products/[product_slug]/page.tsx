@@ -45,6 +45,7 @@ export default async function ProductDetailPage({ params }: ProductDetailPagePro
       marketName={market.name}
       product={product}
       registrationDeadlineMinutes={market.registration_deadline_minutes}
+      requiresRegistration={market.requires_registration}
     />
   );
 }
