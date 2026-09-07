@@ -57,23 +57,33 @@ const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1']);
  * (`undefined` — otomatis ter-scope ke domain itu sendiri, tidak perlu
  * attribute `Domain` apa pun).
  */
+/**
+ * `true` kalau `targetHostname` adalah subdomain (atau sama persis)
+ * platform kita sendiri (`NEXT_PUBLIC_PLATFORM_URL`) — dipakai `session.ts`
+ * (tentukan cookie wildcard vs host-only) DAN `app/auth/callback/route.ts`
+ * (tentukan perlu hop `/auth/session` handoff atau tidak), harus konsisten
+ * di kedua tempat jadi diekspor dari sini, satu sumber kebenaran.
+ */
+export function isPlatformHost(targetHostname: string): boolean {
+  const platformUrl = process.env.NEXT_PUBLIC_PLATFORM_URL;
+  if (!platformUrl) return false;
+
+  try {
+    const platformHostname = new URL(platformUrl).hostname;
+    return targetHostname === platformHostname || targetHostname.endsWith(`.${platformHostname}`);
+  } catch {
+    return false;
+  }
+}
+
 function getCookieDomain(targetHostname: string): string | undefined {
   if (LOCAL_HOSTS.has(targetHostname)) return undefined;
+  if (!isPlatformHost(targetHostname)) return undefined;
 
-  const platformUrl = process.env.NEXT_PUBLIC_PLATFORM_URL;
-  if (!platformUrl) return undefined;
-
-  let platformHostname: string;
-  try {
-    platformHostname = new URL(platformUrl).hostname;
-  } catch {
-    return undefined;
-  }
-
-  const isPlatformHost =
-    targetHostname === platformHostname || targetHostname.endsWith(`.${platformHostname}`);
-
-  return isPlatformHost ? `.${platformHostname}` : undefined;
+  // isPlatformHost() sudah pastikan NEXT_PUBLIC_PLATFORM_URL valid & match —
+  // aman parse ulang di sini buat ambil hostname-nya.
+  const platformHostname = new URL(process.env.NEXT_PUBLIC_PLATFORM_URL!).hostname;
+  return `.${platformHostname}`;
 }
 
 /** `targetHostname` = host yang benar-benar akan menerima response ini — WAJIB diisi benar, jangan diasumsikan dari env. */

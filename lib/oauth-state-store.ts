@@ -46,6 +46,15 @@ const COOKIE_STATE_PREFIX = 'oauthst_';
  */
 const CONSUMED_GRACE_SECONDS = 30;
 
+const SESSION_HANDOFF_KEY_PREFIX = 'session_handoff:';
+/**
+ * TTL pendek SENGAJA — handoff ini cuma dipakai untuk SATU redirect
+ * berikutnya (dari `lelang.bagdja.com/auth/callback` ke
+ * `{origin-tenant}/auth/session`), harusnya dikonsumsi dalam hitungan
+ * detik. Lihat docblock `SessionHandoffPayload` untuk kenapa hop ini ada.
+ */
+const SESSION_HANDOFF_TTL_SECONDS = 60;
+
 export interface OAuthStatePayload {
   codeVerifier: string;
   next: string | null;
@@ -60,16 +69,38 @@ export interface OAuthStatePayload {
   origin: string;
 }
 
-type MemoryEntry = { payload: OAuthStatePayload; expiresAt: number };
+/**
+ * Payload dikirim lewat hop tambahan `/auth/session?handoff=<id>` — HANYA
+ * dipakai untuk domain custom (bukan subdomain platform, lihat
+ * `session.ts` `getCookieDomain`). Alasan hop ini ada: `/auth/callback`
+ * SELALU jalan di host `redirect_uri` OAuth yang tetap (mis.
+ * `lelang.bagdja.com`) — server itu SECARA FUNDAMENTAL tidak bisa men-set
+ * cookie untuk domain lain yang tidak terkait (`pasarmolly.com`), apa pun
+ * `Domain` attribute-nya (proteksi cookie browser, BUKAN bug yang bisa
+ * di-workaround dari sisi kita). Solusinya: titipkan payload sesi di sini
+ * (server-side, sekali pakai, TTL pendek), redirect balik ke ORIGIN TENANT
+ * ASLI (`pasarmolly.com`, lewat Traefik ke app yang sama) — baru DI SANA
+ * cookie di-set, karena request itu genuinely dilayani "sebagai"
+ * `pasarmolly.com` dari sudut pandang browser.
+ */
+export interface SessionHandoffPayload {
+  accessToken: string;
+  user: { userId: string; email?: string; username?: string };
+  redirectTo: string;
+}
+
+type MemoryEntry<T = OAuthStatePayload> = { payload: T; expiresAt: number };
 
 // globalThis (bukan module-level `let`) — supaya tidak hilang saat Next.js
 // hot-reload me-reset module state di dev, dan Symbol.for() unik per app
 // kalau suatu saat beberapa Next.js app ke-bundle dalam satu proses.
 const GLOBAL_STORE_KEY = Symbol.for('bagdja.auction.renderer.oauthMemoryStore');
+const GLOBAL_HANDOFF_STORE_KEY = Symbol.for('bagdja.auction.renderer.sessionHandoffMemoryStore');
 const GLOBAL_CLIENT_KEY = Symbol.for('bagdja.auction.renderer.redisClient');
 
 type OAuthGlobal = {
   [GLOBAL_STORE_KEY]?: Map<string, MemoryEntry>;
+  [GLOBAL_HANDOFF_STORE_KEY]?: Map<string, MemoryEntry<SessionHandoffPayload>>;
   [GLOBAL_CLIENT_KEY]?: Redis | null;
 };
 
@@ -78,11 +109,18 @@ function getOAuthGlobal(): OAuthGlobal {
   if (!g[GLOBAL_STORE_KEY]) {
     g[GLOBAL_STORE_KEY] = new Map<string, MemoryEntry>();
   }
+  if (!g[GLOBAL_HANDOFF_STORE_KEY]) {
+    g[GLOBAL_HANDOFF_STORE_KEY] = new Map<string, MemoryEntry<SessionHandoffPayload>>();
+  }
   return g;
 }
 
 function getMemoryStore(): Map<string, MemoryEntry> {
   return getOAuthGlobal()[GLOBAL_STORE_KEY]!;
+}
+
+function getHandoffMemoryStore(): Map<string, MemoryEntry<SessionHandoffPayload>> {
+  return getOAuthGlobal()[GLOBAL_HANDOFF_STORE_KEY]!;
 }
 
 function getCachedRedisClient(): Redis | null | undefined {
@@ -124,12 +162,15 @@ function isMemoryFallbackAllowed(): boolean {
   return process.env.NODE_ENV !== 'production';
 }
 
-function purgeExpiredMemoryEntries(): void {
-  const store = getMemoryStore();
+function purgeExpiredEntries<T>(store: Map<string, MemoryEntry<T>>): void {
   const now = Date.now();
   for (const [key, entry] of store) {
     if (entry.expiresAt <= now) store.delete(key);
   }
+}
+
+function purgeExpiredMemoryEntries(): void {
+  purgeExpiredEntries(getMemoryStore());
 }
 
 /** ID pendek acak (~24 karakter base64url) — dikirim sebagai `state` ke IdP. */
@@ -223,6 +264,62 @@ export async function consumeOAuthState(stateId: string): Promise<OAuthStatePayl
     } catch {
       // Cookie fallback opsional — diam kalau gagal, sudah jelas dari return null di bawah.
     }
+  }
+
+  return null;
+}
+
+/** Lihat docblock `SessionHandoffPayload` — dipanggil `auth/callback/route.ts` sebelum redirect ke `/auth/session` di origin tenant asli. */
+export async function saveSessionHandoff(
+  handoffId: string,
+  payload: SessionHandoffPayload,
+): Promise<boolean> {
+  const redis = getRedisClient();
+  const key = `${SESSION_HANDOFF_KEY_PREFIX}${handoffId}`;
+
+  if (redis) {
+    try {
+      await redis.set(key, JSON.stringify(payload), 'EX', SESSION_HANDOFF_TTL_SECONDS);
+      return true;
+    } catch (error: any) {
+      console.error(`[session-handoff] save REDIS FAIL handoffId=${handoffId}: ${error?.message ?? error}`);
+    }
+  }
+
+  if (!isMemoryFallbackAllowed()) {
+    console.error('[session-handoff] save: production mode & no redis → fail');
+    return false;
+  }
+
+  const store = getHandoffMemoryStore();
+  purgeExpiredEntries(store);
+  store.set(key, { payload, expiresAt: Date.now() + SESSION_HANDOFF_TTL_SECONDS * 1000 });
+  return true;
+}
+
+/** Sekali pakai — pola sama `consumeOAuthState` (grace window, bukan langsung hapus, lihat `CONSUMED_GRACE_SECONDS`). */
+export async function consumeSessionHandoff(handoffId: string): Promise<SessionHandoffPayload | null> {
+  const redis = getRedisClient();
+  const key = `${SESSION_HANDOFF_KEY_PREFIX}${handoffId}`;
+
+  if (redis) {
+    try {
+      const raw = await redis.get(key);
+      if (raw) {
+        await redis.expire(key, CONSUMED_GRACE_SECONDS);
+        const payload = JSON.parse(raw) as SessionHandoffPayload;
+        if (payload?.accessToken) return payload;
+      }
+    } catch (error: any) {
+      console.error(`[session-handoff] consume REDIS FAIL handoffId=${handoffId}: ${error?.message ?? error}`);
+    }
+  }
+
+  if (isMemoryFallbackAllowed()) {
+    const store = getHandoffMemoryStore();
+    const entry = store.get(key);
+    if (entry) store.set(key, { ...entry, expiresAt: Date.now() + CONSUMED_GRACE_SECONDS * 1000 });
+    if (entry && entry.expiresAt > Date.now()) return entry.payload;
   }
 
   return null;

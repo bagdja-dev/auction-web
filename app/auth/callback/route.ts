@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { setSessionCookies } from '@/lib/session';
-import { consumeOAuthState } from '@/lib/oauth-state-store';
+import { setSessionCookies, isPlatformHost } from '@/lib/session';
+import { consumeOAuthState, generateStateId, saveSessionHandoff } from '@/lib/oauth-state-store';
 import { resolveOrigin } from '@/lib/resolve-origin';
 
 const AUTH_URL = process.env.NEXT_PUBLIC_AUTH_URL ?? 'https://login.bagdja.com';
@@ -81,23 +81,40 @@ export async function GET(request: NextRequest) {
         ? nextPath
         : '/';
 
-    // Redirect balik ke origin login ASLI (subdomain tenant), BUKAN
-    // `request.url` (selalu host `redirect_uri` OAuth tetap) — lihat catatan
-    // di lib/session.ts soal kenapa ini juga menentukan Domain cookie.
-    const response = NextResponse.redirect(new URL(redirectTo, decoded.origin));
+    const user = {
+      userId: payload.sub ?? payload.userId,
+      email: payload.email,
+      username: payload.username,
+    };
 
-    setSessionCookies(
-      response,
-      accessToken,
-      {
-        userId: payload.sub ?? payload.userId,
-        email: payload.email,
-        username: payload.username,
-      },
-      decoded.origin,
+    const originHostname = new URL(decoded.origin).hostname;
+
+    if (isPlatformHost(originHostname)) {
+      // Subdomain platform kita sendiri (`{slug}.lelang.bagdja.com`) — cookie
+      // wildcard `.{platformHostname}` valid di-set langsung dari sini
+      // (host callback ini SENDIRI juga bagian dari domain yang sama), jalur
+      // pendek seperti sebelumnya.
+      const response = NextResponse.redirect(new URL(redirectTo, decoded.origin));
+      setSessionCookies(response, accessToken, user, decoded.origin);
+      return response;
+    }
+
+    // Domain custom Owner (mis. `pasarmolly.com`) — SECARA FUNDAMENTAL tidak
+    // bisa di-set cookie-nya dari sini (host callback ini tetap
+    // `lelang.bagdja.com`, redirect_uri OAuth yang fixed, RFC 6265 melarang
+    // cookie lintas domain yang tidak terkait). Titipkan payload sesi lewat
+    // handoff sekali-pakai, redirect ke `/auth/session` di origin TENANT
+    // ASLI — baru di sana cookie benar-benar bisa di-set. Lihat docblock
+    // `SessionHandoffPayload` di lib/oauth-state-store.ts.
+    const handoffId = generateStateId();
+    const saved = await saveSessionHandoff(handoffId, { accessToken, user, redirectTo });
+    if (!saved) {
+      return NextResponse.redirect(new URL('/?error=server_misconfigured', origin));
+    }
+
+    return NextResponse.redirect(
+      new URL(`/auth/session?handoff=${handoffId}`, decoded.origin),
     );
-
-    return response;
   } catch (err) {
     console.error('OAuth callback error:', err);
     return NextResponse.redirect(new URL('/?error=server_error', origin));
