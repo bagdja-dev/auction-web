@@ -31,6 +31,20 @@ import { cookies } from 'next/headers';
 const STATE_KEY_PREFIX = 'oauth_state:';
 const DEFAULT_TTL_SECONDS = 600;
 const COOKIE_STATE_PREFIX = 'oauthst_';
+/**
+ * Grace window setelah state dikonsumsi PERTAMA KALI — bukan langsung
+ * dihapus, TTL-nya dipendekkan ke sekian detik ini. Ditambahkan 2026-09-07:
+ * request callback yang persis sama (network-level retry dari
+ * Cloudflare/Traefik saat origin sempat tidak stabil, mis. lagi restart)
+ * bisa menyusul dalam hitungan detik — tanpa grace window ini, retry itu
+ * dapat `state_mismatch` walau login PERTAMANYA sudah sukses (cookie sesi
+ * SUDAH ter-set), membingungkan user (kelihatan gagal padahal sudah
+ * login). `code` OAuth dari IdP tetap sekali-pakai independen di endpoint
+ * `/oauth/token` mereka, jadi risiko replay asli (penyerang) tidak
+ * bertambah signifikan — window ini cuma menutup celah UX untuk retry
+ * jaringan yang sah, bukan melemahkan proteksi replay yang sebenarnya.
+ */
+const CONSUMED_GRACE_SECONDS = 30;
 
 export interface OAuthStatePayload {
   codeVerifier: string;
@@ -169,7 +183,11 @@ export async function saveOAuthState(
   return true;
 }
 
-/** Sekali pakai — GET lalu DEL (bukan GETDEL, kompatibel Redis <6.2) supaya `state` tidak bisa dipakai ulang (replay). */
+/**
+ * GET lalu perpendek TTL ke `CONSUMED_GRACE_SECONDS` (BUKAN langsung DEL) —
+ * retry jaringan yang menyusul dalam grace window itu dapat payload yang
+ * SAMA (bukan `state_mismatch`), lihat docblock konstantanya.
+ */
 export async function consumeOAuthState(stateId: string): Promise<OAuthStatePayload | null> {
   const redis = getRedisClient();
   const key = `${STATE_KEY_PREFIX}${stateId}`;
@@ -178,7 +196,7 @@ export async function consumeOAuthState(stateId: string): Promise<OAuthStatePayl
     try {
       const raw = await redis.get(key);
       if (raw) {
-        await redis.del(key);
+        await redis.expire(key, CONSUMED_GRACE_SECONDS);
         const payload = JSON.parse(raw) as OAuthStatePayload;
         if (payload?.codeVerifier) return payload;
       }
@@ -190,7 +208,7 @@ export async function consumeOAuthState(stateId: string): Promise<OAuthStatePayl
   if (isMemoryFallbackAllowed()) {
     const store = getMemoryStore();
     const entry = store.get(key);
-    store.delete(key);
+    if (entry) store.set(key, { ...entry, expiresAt: Date.now() + CONSUMED_GRACE_SECONDS * 1000 });
     if (entry && entry.expiresAt > Date.now()) return entry.payload;
 
     try {
