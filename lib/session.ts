@@ -37,16 +37,43 @@ const USER_COOKIE = 'am_buyer_user';
 /** Sama seperti middleware.ts — host dev lokal, tidak pernah domain-match subdomain wildcard produksi. */
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1']);
 
+/**
+ * BUG (2026-09-07): fungsi ini SEBELUMNYA selalu balas `.{platformHostname}`
+ * apa pun `targetHostname`-nya — parameter itu cuma dipakai buat cek
+ * `LOCAL_HOSTS`, tidak pernah benar-benar menentukan domain cookie. Untuk
+ * tenant subdomain platform (`moly.lelang.bagdja.com`) ini kebetulan tidak
+ * kelihatan salah (memang seharusnya `.lelang.bagdja.com`), TAPI untuk
+ * domain custom Owner (`pasarmolly.com`, sama sekali BUKAN subdomain
+ * platform) hasilnya SELALU Domain attribute yang tidak match host asli —
+ * RFC 6265 mewajibkan Domain match host yang benar-benar melayani respons,
+ * jadi browser DIAM-DIAM membuang seluruh `Set-Cookie` (bukan error yang
+ * kelihatan). Efeknya: user "berhasil" login (state/token exchange sukses),
+ * tapi mendarat di `pasarmolly.com` tanpa cookie sesi sama sekali → app
+ * anggap belum login → auto-redirect ke `/auth/login` lagi → berulang.
+ *
+ * Sekarang `targetHostname` benar-benar dipakai: wildcard cookie
+ * (`.{platformHostname}`) HANYA kalau target memang subdomain (atau sama
+ * persis) platform kita sendiri; domain custom dapat cookie host-only
+ * (`undefined` — otomatis ter-scope ke domain itu sendiri, tidak perlu
+ * attribute `Domain` apa pun).
+ */
 function getCookieDomain(targetHostname: string): string | undefined {
   if (LOCAL_HOSTS.has(targetHostname)) return undefined;
 
   const platformUrl = process.env.NEXT_PUBLIC_PLATFORM_URL;
   if (!platformUrl) return undefined;
+
+  let platformHostname: string;
   try {
-    return `.${new URL(platformUrl).hostname}`;
+    platformHostname = new URL(platformUrl).hostname;
   } catch {
     return undefined;
   }
+
+  const isPlatformHost =
+    targetHostname === platformHostname || targetHostname.endsWith(`.${platformHostname}`);
+
+  return isPlatformHost ? `.${platformHostname}` : undefined;
 }
 
 /** `targetHostname` = host yang benar-benar akan menerima response ini — WAJIB diisi benar, jangan diasumsikan dari env. */

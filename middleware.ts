@@ -15,6 +15,8 @@
  */
 import { NextResponse, type NextRequest } from 'next/server';
 
+import { resolveOrigin } from '@/lib/resolve-origin';
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5010';
 const PLATFORM_HOST = (() => {
   try {
@@ -40,7 +42,11 @@ function shouldProtect(pathname: string): boolean {
 }
 
 function redirectToLogin(request: NextRequest): NextResponse {
-  const loginUrl = new URL('/auth/login', request.nextUrl.origin);
+  // `resolveOrigin()` (bukan `request.nextUrl.origin` langsung) — sama
+  // seperti app/auth/{login,callback,logout}/route.ts, hindari salah baca
+  // origin jadi bind address container (`0.0.0.0:3000`) di belakang
+  // Traefik/Coolify.
+  const loginUrl = new URL('/auth/login', resolveOrigin(request));
   loginUrl.searchParams.set('next', request.nextUrl.pathname + request.nextUrl.search);
   return NextResponse.redirect(loginUrl);
 }
