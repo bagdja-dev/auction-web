@@ -20,14 +20,18 @@ export async function GET(request: NextRequest) {
   // di belakang Traefik/Coolify — lihat lib/resolve-origin.ts.
   const origin = resolveOrigin(request);
 
-  // code_verifier + next path disimpan di Upstash Redis (bukan cookie) —
-  // supaya tidak bergantung pada cookie yang di-set sebelum redirect
-  // bertahan lintas navigasi ke IdP dan balik lagi. `state` yang dikirim ke
-  // IdP cuma ID pendek acak (lihat lib/oauth-state-store.ts).
+  // code_verifier + next path disimpan di Redis (bukan cookie) — supaya
+  // tidak bergantung pada cookie yang di-set sebelum redirect bertahan
+  // lintas navigasi ke IdP dan balik lagi. `state` yang dikirim ke IdP
+  // cuma ID pendek acak (lihat lib/oauth-state-store.ts).
   const stateId = generateStateId();
+  console.log(
+    `[auth/login] host=${request.headers.get('host')} x-forwarded-host=${request.headers.get('x-forwarded-host')} x-forwarded-proto=${request.headers.get('x-forwarded-proto')} resolvedOrigin=${origin} stateId=${stateId}`,
+  );
   const saved = await saveOAuthState(stateId, { codeVerifier, next, origin });
+  console.log(`[auth/login] saveOAuthState stateId=${stateId} saved=${saved}`);
   if (!saved) {
-    console.error('Upstash Redis belum dikonfigurasi (KV_REST_API_URL/TOKEN atau UPSTASH_REDIS_REST_URL/TOKEN)');
+    console.error('Redis belum dikonfigurasi/tidak bisa diakses (REDIS_URL)');
     return NextResponse.redirect(new URL('/?error=server_misconfigured', origin));
   }
 

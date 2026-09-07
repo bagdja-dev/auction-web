@@ -17,11 +17,15 @@ export async function GET(request: NextRequest) {
   // lagi sebagai base redirect), supaya user tidak pernah diarahkan ke host
   // yang tidak bisa diakses browser-nya.
   const origin = resolveOrigin(request);
+  console.log(
+    `[auth/callback] host=${request.headers.get('host')} x-forwarded-host=${request.headers.get('x-forwarded-host')} x-forwarded-proto=${request.headers.get('x-forwarded-proto')} resolvedOrigin=${origin}`,
+  );
 
   const { searchParams } = new URL(request.url);
   const code = searchParams.get('code');
   const state = searchParams.get('state');
   const error = searchParams.get('error');
+  console.log(`[auth/callback] state=${state} hasCode=${Boolean(code)} error=${error}`);
 
   if (error) {
     return NextResponse.redirect(new URL('/?error=auth_denied', origin));
@@ -36,6 +40,7 @@ export async function GET(request: NextRequest) {
   // konsisten menyimpan Set-Cookie yang menempel di response redirect (lihat
   // login/route.ts).
   const decoded = await consumeOAuthState(state);
+  console.log(`[auth/callback] consumeOAuthState state=${state} found=${Boolean(decoded)}`);
 
   if (!decoded) {
     return NextResponse.redirect(new URL('/?error=state_mismatch', origin));
