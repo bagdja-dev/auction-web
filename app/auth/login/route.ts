@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { generateCodeVerifier, generateCodeChallenge, buildAuthorizeUrl } from '@/lib/auth';
 import { generateStateId, saveOAuthState } from '@/lib/oauth-state-store';
+import { resolveVerifiedMarketDomain } from '@/lib/market-domain';
 import { resolveOrigin } from '@/lib/resolve-origin';
+import { isPlatformHost } from '@/lib/session';
 
 function safeNextPath(next: string | null): string | null {
   if (!next || !next.startsWith('/') || next.startsWith('//')) return null;
@@ -19,6 +21,27 @@ export async function GET(request: NextRequest) {
   // langsung) supaya tidak meleset jadi bind address container (`0.0.0.0:3000`)
   // di belakang Traefik/Coolify — lihat lib/resolve-origin.ts.
   const origin = resolveOrigin(request);
+  const originUrl = new URL(origin);
+  const isLocal =
+    originUrl.hostname === 'localhost' || originUrl.hostname === '127.0.0.1';
+
+  // Domain custom tidak cukup hanya berhasil masuk lewat router Traefik:
+  // ikat percobaan OAuth ini ke Market aktif+terverifikasi yang terdaftar
+  // di database. Callback akan memvalidasi pasangan domain/slug ini lagi
+  // sebelum sesi diserahkan kembali ke domain custom.
+  let marketSlug: string | null = null;
+  if (!isLocal && !isPlatformHost(originUrl.hostname)) {
+    const market = await resolveVerifiedMarketDomain(originUrl.hostname);
+    if (!market) {
+      console.warn(
+        `[auth/login] custom domain tidak aktif/terverifikasi host=${originUrl.hostname}`,
+      );
+      return NextResponse.redirect(
+        new URL('/?error=domain_not_verified', origin),
+      );
+    }
+    marketSlug = market.slug;
+  }
 
   // code_verifier + next path disimpan di Redis (bukan cookie) — supaya
   // tidak bergantung pada cookie yang di-set sebelum redirect bertahan
@@ -28,7 +51,12 @@ export async function GET(request: NextRequest) {
   console.log(
     `[auth/login] host=${request.headers.get('host')} x-forwarded-host=${request.headers.get('x-forwarded-host')} x-forwarded-proto=${request.headers.get('x-forwarded-proto')} resolvedOrigin=${origin} stateId=${stateId}`,
   );
-  const saved = await saveOAuthState(stateId, { codeVerifier, next, origin });
+  const saved = await saveOAuthState(stateId, {
+    codeVerifier,
+    next,
+    origin,
+    marketSlug,
+  });
   console.log(`[auth/login] saveOAuthState stateId=${stateId} saved=${saved}`);
   if (!saved) {
     console.error('Redis belum dikonfigurasi/tidak bisa diakses (REDIS_URL)');

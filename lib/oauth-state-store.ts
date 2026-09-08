@@ -59,6 +59,18 @@ export interface OAuthStatePayload {
   codeVerifier: string;
   next: string | null;
   /**
+   * Slug Market hasil resolusi database saat login dimulai. `null` untuk
+   * host platform (`*.market.bagdja.com`/localhost), karena host tersebut
+   * tidak memakai tabel custom-domain.
+   *
+   * Callback custom-domain wajib resolve ulang `origin` ke database dan
+   * membandingkan slug-nya dengan nilai ini sebelum membuat session
+   * handoff. Dengan begitu domain yang dihapus, dipindah ke Market lain,
+   * dinonaktifkan, atau kehilangan status verifikasi selama flow OAuth
+   * tidak bisa tetap menerima sesi.
+   */
+  marketSlug: string | null;
+  /**
    * Origin (scheme+host) tempat login DIMULAI — mis. `https://barang-antik.market.bagdja.com`.
    * OAuth `redirect_uri` wajib satu host tetap, jadi callback SELALU jalan di
    * host itu, BUKAN di subdomain tenant asal. Tanpa origin ini, callback tidak

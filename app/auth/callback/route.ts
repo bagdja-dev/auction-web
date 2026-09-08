@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { setSessionCookies, isPlatformHost } from '@/lib/session';
 import { consumeOAuthState, generateStateId, saveSessionHandoff } from '@/lib/oauth-state-store';
+import { resolveVerifiedMarketDomain } from '@/lib/market-domain';
 import { resolveOrigin } from '@/lib/resolve-origin';
 
 const AUTH_URL = process.env.NEXT_PUBLIC_AUTH_URL ?? 'https://login.bagdja.com';
@@ -49,6 +50,31 @@ export async function GET(request: NextRequest) {
   const codeVerifier = decoded.codeVerifier;
 
   try {
+    const originHostname = new URL(decoded.origin).hostname;
+    const platformOrigin = isPlatformHost(originHostname);
+    const localOrigin =
+      originHostname === 'localhost' || originHostname === '127.0.0.1';
+
+    // Untuk domain custom, validasi database dilakukan SEBELUM code OAuth
+    // ditukar. Origin dari state harus masih terdaftar, aktif,
+    // terverifikasi, dan tetap menunjuk Market yang sama seperti saat login
+    // dimulai.
+    if (!platformOrigin && !localOrigin) {
+      const resolvedMarket = await resolveVerifiedMarketDomain(originHostname);
+      if (
+        !decoded.marketSlug ||
+        !resolvedMarket ||
+        resolvedMarket.slug !== decoded.marketSlug
+      ) {
+        console.warn(
+          `[auth/callback] custom domain validation failed host=${originHostname} expectedSlug=${decoded.marketSlug ?? 'missing'} actualSlug=${resolvedMarket?.slug ?? 'not-found'}`,
+        );
+        return NextResponse.redirect(
+          new URL('/?error=domain_not_verified', origin),
+        );
+      }
+    }
+
     const tokenRes = await fetch(`${AUTH_URL}/oauth/token`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -87,9 +113,7 @@ export async function GET(request: NextRequest) {
       username: payload.username,
     };
 
-    const originHostname = new URL(decoded.origin).hostname;
-
-    if (isPlatformHost(originHostname)) {
+    if (platformOrigin) {
       // Subdomain platform kita sendiri (`{slug}.lelang.bagdja.com`) — cookie
       // wildcard `.{platformHostname}` valid di-set langsung dari sini
       // (host callback ini SENDIRI juga bagian dari domain yang sama), jalur
