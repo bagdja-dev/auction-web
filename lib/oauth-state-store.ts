@@ -54,6 +54,8 @@ const SESSION_HANDOFF_KEY_PREFIX = 'session_handoff:';
  * detik. Lihat docblock `SessionHandoffPayload` untuk kenapa hop ini ada.
  */
 const SESSION_HANDOFF_TTL_SECONDS = 60;
+const LOGOUT_RETURN_KEY_PREFIX = 'logout_return:';
+const LOGOUT_RETURN_TTL_SECONDS = 60;
 
 export interface OAuthStatePayload {
   codeVerifier: string;
@@ -101,6 +103,11 @@ export interface SessionHandoffPayload {
   redirectTo: string;
 }
 
+export interface LogoutReturnPayload {
+  origin: string;
+  marketSlug: string;
+}
+
 type MemoryEntry<T = OAuthStatePayload> = { payload: T; expiresAt: number };
 
 // globalThis (bukan module-level `let`) — supaya tidak hilang saat Next.js
@@ -108,11 +115,13 @@ type MemoryEntry<T = OAuthStatePayload> = { payload: T; expiresAt: number };
 // kalau suatu saat beberapa Next.js app ke-bundle dalam satu proses.
 const GLOBAL_STORE_KEY = Symbol.for('bagdja.auction.renderer.oauthMemoryStore');
 const GLOBAL_HANDOFF_STORE_KEY = Symbol.for('bagdja.auction.renderer.sessionHandoffMemoryStore');
+const GLOBAL_LOGOUT_RETURN_STORE_KEY = Symbol.for('bagdja.auction.renderer.logoutReturnMemoryStore');
 const GLOBAL_CLIENT_KEY = Symbol.for('bagdja.auction.renderer.redisClient');
 
 type OAuthGlobal = {
   [GLOBAL_STORE_KEY]?: Map<string, MemoryEntry>;
   [GLOBAL_HANDOFF_STORE_KEY]?: Map<string, MemoryEntry<SessionHandoffPayload>>;
+  [GLOBAL_LOGOUT_RETURN_STORE_KEY]?: Map<string, MemoryEntry<LogoutReturnPayload>>;
   [GLOBAL_CLIENT_KEY]?: Redis | null;
 };
 
@@ -124,6 +133,9 @@ function getOAuthGlobal(): OAuthGlobal {
   if (!g[GLOBAL_HANDOFF_STORE_KEY]) {
     g[GLOBAL_HANDOFF_STORE_KEY] = new Map<string, MemoryEntry<SessionHandoffPayload>>();
   }
+  if (!g[GLOBAL_LOGOUT_RETURN_STORE_KEY]) {
+    g[GLOBAL_LOGOUT_RETURN_STORE_KEY] = new Map<string, MemoryEntry<LogoutReturnPayload>>();
+  }
   return g;
 }
 
@@ -133,6 +145,10 @@ function getMemoryStore(): Map<string, MemoryEntry> {
 
 function getHandoffMemoryStore(): Map<string, MemoryEntry<SessionHandoffPayload>> {
   return getOAuthGlobal()[GLOBAL_HANDOFF_STORE_KEY]!;
+}
+
+function getLogoutReturnMemoryStore(): Map<string, MemoryEntry<LogoutReturnPayload>> {
+  return getOAuthGlobal()[GLOBAL_LOGOUT_RETURN_STORE_KEY]!;
 }
 
 function getCachedRedisClient(): Redis | null | undefined {
@@ -331,6 +347,69 @@ export async function consumeSessionHandoff(handoffId: string): Promise<SessionH
     const store = getHandoffMemoryStore();
     const entry = store.get(key);
     if (entry) store.set(key, { ...entry, expiresAt: Date.now() + CONSUMED_GRACE_SECONDS * 1000 });
+    if (entry && entry.expiresAt > Date.now()) return entry.payload;
+  }
+
+  return null;
+}
+
+/** Simpan origin custom-domain sebelum browser keluar ke bagdja-login untuk menghapus sesi SSO. */
+export async function saveLogoutReturn(
+  handoffId: string,
+  payload: LogoutReturnPayload,
+): Promise<boolean> {
+  const redis = getRedisClient();
+  const key = `${LOGOUT_RETURN_KEY_PREFIX}${handoffId}`;
+
+  if (redis) {
+    try {
+      await redis.set(key, JSON.stringify(payload), 'EX', LOGOUT_RETURN_TTL_SECONDS);
+      return true;
+    } catch (error: any) {
+      console.error(`[logout-return] save REDIS FAIL handoffId=${handoffId}: ${error?.message ?? error}`);
+    }
+  }
+
+  if (!isMemoryFallbackAllowed()) {
+    console.error('[logout-return] save: production mode & no redis → fail');
+    return false;
+  }
+
+  const store = getLogoutReturnMemoryStore();
+  purgeExpiredEntries(store);
+  store.set(key, { payload, expiresAt: Date.now() + LOGOUT_RETURN_TTL_SECONDS * 1000 });
+  return true;
+}
+
+/** Ambil origin logout; grace window menjaga retry callback tetap idempotent. */
+export async function consumeLogoutReturn(
+  handoffId: string,
+): Promise<LogoutReturnPayload | null> {
+  const redis = getRedisClient();
+  const key = `${LOGOUT_RETURN_KEY_PREFIX}${handoffId}`;
+
+  if (redis) {
+    try {
+      const raw = await redis.get(key);
+      if (raw) {
+        await redis.expire(key, CONSUMED_GRACE_SECONDS);
+        const payload = JSON.parse(raw) as LogoutReturnPayload;
+        if (payload?.origin && payload?.marketSlug) return payload;
+      }
+    } catch (error: any) {
+      console.error(`[logout-return] consume REDIS FAIL handoffId=${handoffId}: ${error?.message ?? error}`);
+    }
+  }
+
+  if (isMemoryFallbackAllowed()) {
+    const store = getLogoutReturnMemoryStore();
+    const entry = store.get(key);
+    if (entry) {
+      store.set(key, {
+        ...entry,
+        expiresAt: Date.now() + CONSUMED_GRACE_SECONDS * 1000,
+      });
+    }
     if (entry && entry.expiresAt > Date.now()) return entry.payload;
   }
 

@@ -78,14 +78,21 @@ function formatDateTime(iso: string | null): string {
  * submit-nya pasti 400 — ditemukan & ditutup di sini, dihitung ulang persis
  * sama dengan logic backend.
  */
+function isAuctionEnded(
+  productStatus: ProductStatus,
+  auctionEndAt: string | null,
+): boolean {
+  if (productStatus !== 'published') return true;
+  return !!auctionEndAt && Date.now() >= new Date(auctionEndAt).getTime();
+}
+
 function isClosedForRegistration(
   productStatus: ProductStatus,
   auctionStartAt: string | null,
   auctionEndAt: string | null,
   registrationDeadlineMinutes: number | null,
 ): boolean {
-  if (productStatus !== 'published') return true;
-  if (auctionEndAt && Date.now() >= new Date(auctionEndAt).getTime()) return true;
+  if (isAuctionEnded(productStatus, auctionEndAt)) return true;
   if (auctionStartAt && Date.now() >= new Date(auctionStartAt).getTime()) return true;
   if (auctionStartAt && registrationDeadlineMinutes != null) {
     const deadline = new Date(auctionStartAt).getTime() - registrationDeadlineMinutes * 60_000;
@@ -222,15 +229,20 @@ export function AuctionPanel({
   }
 
   if (!isLoggedIn) {
+    const auctionEnded = isAuctionEnded(productStatus, auctionEndAt);
     return (
       <PanelShell>
         <HighestBidSummary highestBid={initialHighestBid} startingPrice={startingPrice} />
-        <Link
-          href={loginHref}
-          className="block w-full rounded-lg bg-[var(--brand-primary)] px-4 py-3 text-center text-sm font-medium text-white transition hover:bg-[var(--brand-primary-hover)]"
-        >
-          Masuk untuk Ikut Lelang
-        </Link>
+        {auctionEnded ? (
+          <p className="text-sm font-medium text-zinc-600">Lelang sudah berakhir.</p>
+        ) : (
+          <Link
+            href={loginHref}
+            className="block w-full rounded-lg bg-[var(--brand-primary)] px-4 py-3 text-center text-sm font-medium text-white transition hover:bg-[var(--brand-primary-hover)]"
+          >
+            Masuk untuk Ikut Lelang
+          </Link>
+        )}
       </PanelShell>
     );
   }
@@ -330,7 +342,7 @@ function RegistrationForm({
   // (mis. Redis/BullMQ belum jalan) — tanpa ini, lelang yang sudah lewat
   // auction_end_at tapi statusnya masih 'published' salah tampil "sudah
   // dimulai" padahal seharusnya "sudah berakhir".
-  const hasEnded = productStatus !== 'published' || (!!auctionEndAt && Date.now() >= new Date(auctionEndAt).getTime());
+  const hasEnded = isAuctionEnded(productStatus, auctionEndAt);
   const alreadyStarted = !!auctionStartAt && Date.now() >= new Date(auctionStartAt).getTime();
 
   const [deposit, setDeposit] = useState<DepositPreview | null>(null);

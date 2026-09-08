@@ -1,26 +1,45 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-import { clearSessionCookies } from '@/lib/session';
-import { buildSsoLogoutUrl } from '@/lib/app-url';
+import { clearSessionCookies, isPlatformHost } from '@/lib/session';
+import { buildSsoLogoutUrl, getAppUrl } from '@/lib/app-url';
+import { resolveVerifiedMarketDomain } from '@/lib/market-domain';
+import { generateStateId, saveLogoutReturn } from '@/lib/oauth-state-store';
 import { resolveOrigin } from '@/lib/resolve-origin';
 
 export async function GET(request: NextRequest) {
-  // Origin request logout ini sendiri (subdomain tenant/domain custom tempat
-  // user klik logout) — SEBELUMNYA `buildSsoLogoutUrl()` dipanggil tanpa
-  // argumen, jatuh ke `getAppUrl()` (URL platform TETAP dari env,
-  // `lelang.bagdja.com`) sehingga user SELALU kembali ke situ walau login
-  // dari domain custom (mis. `pasarmolly.com`) — bug porting yang sama
-  // seperti soal `0.0.0.0:3000`, dibandingkan dengan `bagdja-website`
-  // (referensi asal) yang sudah benar pakai `resolveOrigin()` di sini juga.
   const origin = resolveOrigin(request);
+  const hostname = new URL(origin).hostname;
 
-  const response = NextResponse.redirect(buildSsoLogoutUrl(origin));
+  // bagdja-login sengaja hanya menerima redirect_uri milik *.bagdja.com
+  // (proteksi open redirect), sehingga domain custom tidak boleh dikirim
+  // langsung sebagai redirect_uri. Untuk custom domain, kembali dulu ke
+  // callback tetap di lelang.bagdja.com; callback itu memvalidasi domain ke
+  // database sebelum meneruskan browser ke origin pemanggil.
+  let returnAfterSso = origin;
+  if (!isPlatformHost(hostname) && hostname !== 'localhost' && hostname !== '127.0.0.1') {
+    const market = await resolveVerifiedMarketDomain(hostname);
+    const handoffId = generateStateId();
+    const saved =
+      market &&
+      (await saveLogoutReturn(handoffId, {
+        origin,
+        marketSlug: market.slug,
+      }));
 
-  // cookie di-set dengan Domain scope platform, jadi domain yang sama
-  // otomatis match dari subdomain manapun (lihat lib/session.ts).
+    if (saved) {
+      const callbackUrl = new URL('/auth/logout/callback', getAppUrl());
+      callbackUrl.searchParams.set('handoff', handoffId);
+      returnAfterSso = callbackUrl.toString();
+    } else {
+      console.warn(
+        `[auth/logout] gagal menyimpan tujuan logout custom-domain host=${hostname}; fallback ke platform`,
+      );
+      returnAfterSso = getAppUrl();
+    }
+  }
+
+  const response = NextResponse.redirect(buildSsoLogoutUrl(returnAfterSso));
   clearSessionCookies(response, origin);
 
-  // Redirect to Bagdja Login SSO logout so the shared session cookie
-  // (bagdja_auth_token) is cleared — otherwise the next login skips the form.
   return response;
 }
