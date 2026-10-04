@@ -118,7 +118,7 @@ export function FulfillmentProgress({ marketId, productId, role }: FulfillmentPr
 
   async function handleCompleteStep() {
     if (!nextStep) return;
-    const schema = nextStep.form_schema ?? [];
+    const schema = (nextStep.form_schema ?? []).filter((field) => field.filled_by === role);
     const missing = schema.filter((f) => f.required && !formValues[f.key]?.trim());
     if (missing.length > 0) {
       setActionError(`Field wajib belum diisi: ${missing.map((f) => f.label).join(', ')}`);
@@ -329,7 +329,7 @@ export function FulfillmentProgress({ marketId, productId, role }: FulfillmentPr
       {sellerCanComplete && nextStep && (
         <div className="space-y-3 rounded-lg border border-zinc-200 bg-zinc-50 p-3">
           <p className="text-sm font-medium text-zinc-800">Tandai &ldquo;{nextStep.status_name}&rdquo; Selesai</p>
-          {(nextStep.form_schema ?? []).map((field) => (
+          {(nextStep.form_schema ?? []).filter((field) => field.filled_by === role).map((field) => (
             <div key={field.key} className="space-y-1">
               <label className="block text-xs font-medium text-zinc-600">
                 {field.label}

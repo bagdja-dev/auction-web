@@ -310,12 +310,14 @@ export interface AuctionSettlementMeResponse {
 }
 
 export type MasterFlowFormFieldType = 'text' | 'textarea' | 'number' | 'image_url';
+export type MasterFlowFormFieldFilledBy = 'seller' | 'buyer';
 
 export interface MasterFlowFormField {
   key: string;
   label: string;
   type: MasterFlowFormFieldType;
   required: boolean;
+  filled_by: MasterFlowFormFieldFilledBy;
 }
 
 /** Definisi satu step Master Flow (Fase 5) — SATU Master Flow berlaku untuk semua produk di Market. */
