@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { backendFetch } from '@/lib/backend-api';
+import { resolveOrigin } from '@/lib/resolve-origin';
 
 type RouteContext = { params: Promise<{ path: string[] }> };
 
@@ -20,6 +21,11 @@ async function proxyRequest(request: NextRequest, context: RouteContext) {
   if (method !== 'GET' && method !== 'HEAD') {
     const body = await request.text();
     if (body) options.body = body;
+    // Origin tempat buyer berada (custom domain / subdomain market) — API
+    // memakainya sebagai tujuan kembali dari Bagdja Pay supaya buyer tidak
+    // pindah host (cookie sesi per host). API hanya memakainya kalau milik
+    // market itu.
+    options.headers = { 'x-return-origin': resolveOrigin(request) };
   }
 
   const result = await backendFetch(path, options);

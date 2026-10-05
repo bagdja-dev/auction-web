@@ -4,9 +4,9 @@
   "private": true,
   "description": "Renderer publik per-Market untuk Bagdja Auction Market (Next.js App Router + Tailwind)",
   "scripts": {
-    "dev": "next dev -p 5012",
-    "build": "next build",
-    "start": "next start -p 5012",
+    "dev": "node init && next dev -p 5012",
+    "build": "node init && next build",
+    "start": "node init && next start -p 5012",
     "lint": "next lint",
     "typecheck": "tsc --noEmit"
   },
